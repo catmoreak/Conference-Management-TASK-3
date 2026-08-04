@@ -56,30 +56,34 @@ export default async function Home() {
                 {session && <span>Logged in as {session.user?.name}</span>}
               </p>
               {!session ? (
-
-              ): (
-                  <form>
+                <Link
+                  href="/api/auth/signin"
+                  className="rounded-full bg-white/10 px-10 py-3 font-semibold no-underline transition hover:bg-white/20"
+                >
+                  Sign in
+                </Link>
+              ) : (
+                <form>
                   <button
-                    className = "rounded-full bg-white/10 px-10 py-3 font-semibold no-underline transition hover:bg-white/20"
-                    formAction = {
-                    async() => {
+                    className="rounded-full bg-white/10 px-10 py-3 font-semibold no-underline transition hover:bg-white/20"
+                    formAction={async () => {
                       "use server";
                       await auth.api.signOut({
-                headers: await headers(),
+                        headers: await headers(),
                       });
-              redirect("/");
+                      redirect("/");
                     }}
                   >
-              Sign out
-            </button>
-          </form>
+                    Sign out
+                  </button>
+                </form>
               )}
-        </div>
-      </div>
+            </div>
+          </div>
 
-      {session?.user && <LatestPost />}
-    </div>
-      </main >
-    </HydrateClient >
+          {session?.user && <LatestPost />}
+        </div>
+      </main>
+    </HydrateClient>
   );
 }
