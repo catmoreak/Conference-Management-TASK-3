@@ -56,48 +56,30 @@ export default async function Home() {
                 {session && <span>Logged in as {session.user?.name}</span>}
               </p>
               {!session ? (
-                <form>
+
+              ): (
+                  <form>
                   <button
-                    className="rounded-full bg-white/10 px-10 py-3 font-semibold no-underline transition hover:bg-white/20"
-                    formAction={async () => {
-                      "use server";
-                      const res = await auth.api.signInSocial({
-                        body: {
-                          provider: "github",
-                          callbackURL: "/",
-                        },
-                      });
-                      if (!res.url) {
-                        throw new Error("No URL returned from signInSocial");
-                      }
-                      redirect(res.url);
-                    }}
-                  >
-                    Sign in with Github
-                  </button>
-                </form>
-              ) : (
-                <form>
-                  <button
-                    className="rounded-full bg-white/10 px-10 py-3 font-semibold no-underline transition hover:bg-white/20"
-                    formAction={async () => {
+                    className = "rounded-full bg-white/10 px-10 py-3 font-semibold no-underline transition hover:bg-white/20"
+                    formAction = {
+                    async() => {
                       "use server";
                       await auth.api.signOut({
-                        headers: await headers(),
+                headers: await headers(),
                       });
-                      redirect("/");
+              redirect("/");
                     }}
                   >
-                    Sign out
-                  </button>
-                </form>
+              Sign out
+            </button>
+          </form>
               )}
-            </div>
-          </div>
-
-          {session?.user && <LatestPost />}
         </div>
-      </main>
-    </HydrateClient>
+      </div>
+
+      {session?.user && <LatestPost />}
+    </div>
+      </main >
+    </HydrateClient >
   );
 }
