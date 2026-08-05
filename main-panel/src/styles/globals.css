@@ -1,6 +1,25 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 @theme {
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
+  --font-sans: 'Inter', var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+
+  --color-bg-primary: #F9FAFB;
+  --color-bg-secondary: #F3F4F6;
+  --color-border-soft: #CBD5E1;
+  --color-text-primary: #111827;
+  --color-text-secondary: #6B7280;
+  --color-text-muted: #9CA3AF;
+  --color-accent-slate: #64748B;
+  --color-accent-blue: #3B82F6;
+  --color-accent-sage: #6B8F71;
+  --color-success: #16A34A;
+  --color-warning: #D97706;
+  --color-error: #DC2626;
+
+  --shadow-hard: 4px 4px 0px 0px rgba(0,0,0,0.08);
+  --shadow-hard-sm: 2px 2px 0px 0px rgba(0,0,0,0.06);
+  --shadow-hard-lg: 6px 6px 0px 0px rgba(0,0,0,0.08);
+  --shadow-hard-hover: 6px 6px 0px 0px rgba(0,0,0,0.10);
 }

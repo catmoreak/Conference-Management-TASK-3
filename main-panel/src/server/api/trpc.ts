@@ -13,6 +13,8 @@ import { ZodError } from "zod";
 
 import { auth } from "~/server/better-auth";
 import { db } from "~/server/db";
+import { assertOnboardingComplete } from "~/server/auth/mfa-gate";
+import { assertPermissions, type Permission } from "~/server/auth/rbac";
 
 /**
  * 1. CONTEXT
@@ -112,10 +114,10 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
 export const publicProcedure = t.procedure.use(timingMiddleware);
 
 /**
- * Protected (authenticated) procedure
+ * Protected (authenticated) procedure — LEGACY
  *
- * If you want a query or mutation to ONLY be accessible to logged in users, use this. It verifies
- * the session is valid and guarantees `ctx.session.user` is not null.
+ * Basic session check only. Prefer `authedProcedure` for new code, which
+ * additionally enforces MFA enrollment and password-reset completion.
  *
  * @see https://trpc.io/docs/procedures
  */
@@ -132,3 +134,137 @@ export const protectedProcedure = t.procedure
       },
     });
   });
+
+// ── Auth-hardened procedures ────────────────────────────────────────────
+
+/**
+ * Authenticated procedure with full security checks:
+ * - Session must exist
+ * - User must not be banned/suspended
+ * - User must have completed password reset
+ * - User must have enrolled MFA
+ *
+ * This is the baseline for all protected routes going forward.
+ */
+export const authedProcedure = t.procedure
+  .use(timingMiddleware)
+  .use(({ ctx, next }) => {
+    if (!ctx.session?.user) {
+      throw new TRPCError({ code: "UNAUTHORIZED" });
+    }
+
+    const user = ctx.session.user;
+
+    // Check for banned/suspended status
+    // Note: Better Auth's admin plugin also checks `banned` at session creation,
+    // but we double-check here for defense-in-depth (e.g. if user was banned
+    // while they still had an active session).
+    if (
+      (user as Record<string, unknown>).banned === true ||
+      (user as Record<string, unknown>).status === "suspended"
+    ) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Account is suspended",
+      });
+    }
+
+    // Enforce onboarding gates (password reset + MFA enrollment)
+    try {
+      assertOnboardingComplete({ user: user as {
+        twoFactorEnabled?: boolean | null;
+        mustResetPassword?: boolean;
+      }});
+    } catch (err: unknown) {
+      const error = err as { code?: string; error?: string };
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: error.error ?? "Onboarding incomplete",
+        cause: error.code,
+      });
+    }
+
+    return next({
+      ctx: {
+        session: { ...ctx.session, user: ctx.session.user },
+      },
+    });
+  });
+
+/**
+ * Admin-only procedure.
+ * Extends authedProcedure with role === "admin" check.
+ */
+export const adminProcedure = authedProcedure.use(({ ctx, next }) => {
+  const role = (ctx.session.user as Record<string, unknown>).role as
+    | string
+    | undefined;
+  if (role !== "admin") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Administrator access required",
+    });
+  }
+  return next({ ctx });
+});
+
+/**
+ * Staff procedure — accessible to admin and staff roles.
+ * Grants all permissions except account/user management.
+ */
+export const staffProcedure = authedProcedure.use(({ ctx, next }) => {
+  const role = (ctx.session.user as Record<string, unknown>).role as
+    | string
+    | undefined;
+  if (role !== "admin" && role !== "staff") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Staff or administrator access required",
+    });
+  }
+  return next({ ctx });
+});
+
+/**
+ * Presentation Operations Staff procedure — accessible to all three roles,
+ * but only for view/download/live-control operations.
+ *
+ * Usage: pass required permissions as a generic check at the router level.
+ */
+export const presOpsProcedure = authedProcedure.use(({ ctx, next }) => {
+  // All three roles are allowed to reach this procedure;
+  // fine-grained permission checks happen at the individual route level
+  // using assertPermissions(role, ...requiredPermissions).
+  const role = (ctx.session.user as Record<string, unknown>).role as
+    | string
+    | undefined;
+  if (role !== "admin" && role !== "staff" && role !== "pres_ops_staff") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Access denied for your role",
+    });
+  }
+  return next({ ctx });
+});
+
+/**
+ * Helper to create a procedure that checks specific permissions.
+ * Usage: createPermissionProcedure("material:upload", "material:delete")
+ */
+export function createPermissionProcedure(...permissions: Permission[]) {
+  return authedProcedure.use(({ ctx, next }) => {
+    const role = (ctx.session.user as Record<string, unknown>).role as
+      | string
+      | undefined;
+    try {
+      assertPermissions(role, ...permissions);
+    } catch (err: unknown) {
+      const error = err as { error?: string };
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: error.error ?? "Insufficient permissions",
+      });
+    }
+    return next({ ctx });
+  });
+}

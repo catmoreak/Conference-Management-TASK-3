@@ -16,13 +16,23 @@ const geist = Geist({
   variable: "--font-geist-sans",
 });
 
+import { AuthProvider } from "~/app/_components/AuthProvider";
+import { Navbar } from "~/app/_components/Navbar";
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${geist.variable}`}>
-      <body>
-        <TRPCReactProvider>{children}</TRPCReactProvider>
+      <body className="bg-bg-primary text-text-primary min-h-screen">
+        <TRPCReactProvider>
+          <AuthProvider>
+            <div className="flex flex-col min-h-screen">
+              <Navbar />
+              <main className="flex-1 flex flex-col">{children}</main>
+            </div>
+          </AuthProvider>
+        </TRPCReactProvider>
       </body>
     </html>
   );

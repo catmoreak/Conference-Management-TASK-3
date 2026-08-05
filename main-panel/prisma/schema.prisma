@@ -39,20 +39,64 @@ model User {
   accounts      Account[]
   posts         Post[]
 
+  // Extended fields
+  role              Role      @default(staff)
+  tenantId          String?   @map("tenant_id")
+  status            String    @default("active")
+  mustResetPassword Boolean   @default(false)
+  twoFactorEnabled  Boolean?
+  twoFactor         TwoFactor[]
+
+  // Admin plugin fields
+  banned            Boolean?  @default(false)
+  banReason         String?
+  banExpires        DateTime?
+
   @@unique([email])
   @@map("user")
 }
 
+enum Role {
+  admin
+  staff
+  pres_ops_staff
+}
+
+model TwoFactor {
+  id          String @id
+  secret      String
+  backupCodes String
+  userId      String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("two_factor")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actor_id    String?
+  action      String
+  target_type String?
+  target_id   String?
+  ip          String?
+  user_agent  String?
+  occurred_at DateTime @default(now())
+  result      String
+
+  @@map("audit_log")
+}
+
 model Session {
-  id        String   @id
-  expiresAt DateTime
-  token     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  ipAddress String? //@db.Text
-  userAgent String? //@db.Text
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String   @id
+  expiresAt      DateTime
+  token          String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  ipAddress      String? //@db.Text
+  userAgent      String? //@db.Text
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  impersonatedBy String?
 
   @@unique([token])
   @@map("session")
@@ -87,3 +131,4 @@ model Verification {
 
   @@map("verification")
 }
+

@@ -8,6 +8,8 @@ const __dirname = path.dirname(__filename);
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 
 function createWindow() {
+  const isKioskRequested = process.argv.includes('--kiosk') || process.env.PODIUM_KIOSK === 'true';
+
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -15,21 +17,39 @@ function createWindow() {
     minHeight: 600,
     title: 'Podium - Conference Presentation',
     backgroundColor: '#090d16',
+    // Apply kiosk settings if requested
+    kiosk: isKioskRequested,
+    frame: !isKioskRequested,
+    autoHideMenuBar: isKioskRequested,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      // Persistent partition so cookies behave correctly and survive app restarts
+      partition: 'persist:podium',
+      devTools: !isKioskRequested, // Disable devTools in kiosk mode
     },
   });
 
-  if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
-    mainWindow.webContents.openDevTools();
-  } else {
-    mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
+  if (isKioskRequested) {
+    mainWindow.setMenuBarVisibility(false);
   }
 
-  mainWindow.setMenuBarVisibility(true);
+  // Load backend domain (or localhost for dev)
+  const targetUrl = process.env.PODIUM_BACKEND_URL ?? 'http://localhost:3000';
+
+  if (isDev) {
+    mainWindow.loadURL(targetUrl);
+    if (!isKioskRequested) {
+      mainWindow.webContents.openDevTools();
+    }
+  } else {
+    mainWindow.loadURL(targetUrl);
+  }
+
+  if (!isKioskRequested) {
+    mainWindow.setMenuBarVisibility(true);
+  }
 }
 
 app.whenReady().then(() => {
