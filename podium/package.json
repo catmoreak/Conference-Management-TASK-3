@@ -1,6 +1,8 @@
 {
   "name": "podium",
   "version": "1.0.0",
+  "description": "Podium Electron presentation shell",
+  "author": "Podium Team",
   "private": true,
   "type": "module",
   "main": "main.js",
@@ -8,7 +10,8 @@
     "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -21,7 +24,32 @@
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.0",
     "electron": "^33.2.1",
+    "electron-builder": "^26.0.0",
     "vite": "^6.0.3",
     "wait-on": "^8.0.1"
-  }
+  },
+  "build": {
+  "appId": "com.podium.electron",
+  "productName": "Podium",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "main.js",
+    "preload.js",
+    "package.json"
+  ],
+  "win": {
+    "target": "nsis"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true
+  },
+  "artifactName": "${productName}-Setup-${version}.exe"
 }
+  }
+
