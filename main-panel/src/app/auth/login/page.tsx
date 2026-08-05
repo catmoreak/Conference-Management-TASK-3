@@ -18,14 +18,14 @@ export default function LoginPage() {
   // Redirection when authenticated
   useEffect(() => {
     if (user) {
-      if (user.mustResetPassword || !user.twoFactorEnabled) {
+      if (user.mustResetPassword) {
         router.replace("/auth/onboarding");
       } else if (user.role === "admin") {
-        router.replace("/admin/accounts");
+        router.replace("/dashboard/admin");
       } else if (user.role === "staff") {
-        router.replace("/audit-logs");
-      } else {
-        router.replace("/podium");
+        router.replace("/dashboard/staff");
+      } else if (user.role === "pres_ops_staff") {
+        router.replace("/dashboard/pres-ops");
       }
     }
   }, [user, router]);
@@ -138,6 +138,7 @@ export default function LoginPage() {
                 id="email"
                 type="email"
                 required
+                suppressHydrationWarning
                 disabled={loading}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -158,6 +159,7 @@ export default function LoginPage() {
                 id="password"
                 type="password"
                 required
+                suppressHydrationWarning
                 disabled={loading}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -170,6 +172,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
+              suppressHydrationWarning
               className="w-full bg-accent-blue hover:bg-accent-blue/90 text-white font-semibold py-3 px-4 rounded-lg text-sm transition shadow-hard hover:shadow-hard-hover active:translate-x-0.5 active:translate-y-0.5 hover:-translate-x-0.5 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent-blue disabled:opacity-50"
             >
               {loading ? "Verifying..." : "Sign In"}
@@ -191,6 +194,7 @@ export default function LoginPage() {
                 id="mfaCode"
                 type="text"
                 required
+                suppressHydrationWarning
                 maxLength={6}
                 pattern="[0-9]*"
                 inputMode="numeric"
@@ -206,6 +210,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
+              suppressHydrationWarning
               className="w-full bg-accent-blue hover:bg-accent-blue/90 text-white font-semibold py-3 px-4 rounded-lg text-sm transition shadow-hard hover:shadow-hard-hover active:translate-x-0.5 active:translate-y-0.5 hover:-translate-x-0.5 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent-blue disabled:opacity-50"
             >
               {loading ? "Verifying..." : "Verify Code"}

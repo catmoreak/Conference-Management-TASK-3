@@ -45,10 +45,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (res.data?.user) {
         const u = res.data.user as unknown as AuthUser;
         setUser(u);
-
-        // Reactively redirect to onboarding if required and not already there
-        if ((u.mustResetPassword || !u.twoFactorEnabled) && !pathname.startsWith("/auth/onboarding")) {
-          router.replace("/auth/onboarding");
+        
+        // Redirect logic based on onboarding state and role
+        if (u.mustResetPassword) {
+          if (!pathname.startsWith("/auth/onboarding")) {
+            router.replace("/auth/onboarding");
+          }
+        } else if (pathname.startsWith("/auth/onboarding") || pathname.startsWith("/auth/login") || pathname === "/") {
+          if (u.role === "admin") {
+            router.replace("/dashboard/admin");
+          } else if (u.role === "staff") {
+            router.replace("/dashboard/staff");
+          } else if (u.role === "pres_ops_staff") {
+            router.replace("/dashboard/pres-ops");
+          }
         }
       } else {
         setUser(null);
@@ -76,8 +86,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (sessionData.data?.user) {
         const u = sessionData.data.user as unknown as AuthUser;
         setUser(u);
-        if ((u.mustResetPassword || !u.twoFactorEnabled) && !pathname.startsWith("/auth/onboarding")) {
-          router.replace("/auth/onboarding");
+        if (u.mustResetPassword) {
+          if (!pathname.startsWith("/auth/onboarding")) {
+            router.replace("/auth/onboarding");
+          }
+        } else if (pathname.startsWith("/auth/onboarding") || pathname.startsWith("/auth/login") || pathname === "/") {
+          if (u.role === "admin") {
+            router.replace("/dashboard/admin");
+          } else if (u.role === "staff") {
+            router.replace("/dashboard/staff");
+          } else if (u.role === "pres_ops_staff") {
+            router.replace("/dashboard/pres-ops");
+          }
         }
       } else {
         setUser(null);
