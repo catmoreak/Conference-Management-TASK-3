@@ -32,6 +32,7 @@ temp/
 
 # Build and dependency outputs
 node_modules/
+release/
 dist/
 build/
 out/
