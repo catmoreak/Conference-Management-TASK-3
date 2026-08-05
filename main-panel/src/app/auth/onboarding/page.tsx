@@ -9,6 +9,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const { user, refetch } = useAuth();
 
+  const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordChanged, setPasswordChanged] = useState(false);
@@ -23,13 +24,13 @@ export default function OnboardingPage() {
 
   // Redirect to target workspace dashboard if onboarding is complete
   useEffect(() => {
-    if (user && !user.mustResetPassword && user.twoFactorEnabled) {
+    if (user && !user.mustResetPassword) {
       if (user.role === "admin") {
-        router.replace("/admin/accounts");
+        router.replace("/dashboard/admin");
       } else if (user.role === "staff") {
-        router.replace("/audit-logs");
-      } else {
-        router.replace("/podium");
+        router.replace("/dashboard/staff");
+      } else if (user.role === "pres_ops_staff") {
+        router.replace("/dashboard/pres-ops");
       }
     }
   }, [user, router]);
@@ -86,7 +87,7 @@ export default function OnboardingPage() {
       // Since it's a forced reset on temporary password, let's ask Better Auth client to update it.
       // Better Auth has changePassword client function.
       const { error: resetError } = await authClient.changePassword({
-        currentPassword: "", // Better Auth config handles temp password
+        currentPassword,
         newPassword: password,
       });
 
@@ -161,6 +162,26 @@ export default function OnboardingPage() {
             <p className="text-xs text-text-secondary">
               For security, you must update your temporary credential before logging in.
             </p>
+
+            <div>
+              <label
+                htmlFor="current-password"
+                className="block text-sm font-semibold text-text-secondary mb-2"
+              >
+                Current Password (Temporary Password)
+              </label>
+              <input
+                id="current-password"
+                type="password"
+                required
+                disabled={loading}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="w-full bg-white border border-border-soft hover:border-accent-slate focus:border-accent-blue text-text-primary placeholder:text-text-muted rounded-lg px-4 py-3 text-sm transition outline-none focus:ring-2 focus:ring-accent-blue/20"
+                placeholder="Enter your temporary password"
+                autoComplete="current-password"
+              />
+            </div>
 
             <div>
               <label
@@ -262,13 +283,32 @@ export default function OnboardingPage() {
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-accent-blue hover:bg-accent-blue/90 text-white font-semibold py-3 px-4 rounded-lg text-sm transition shadow-hard hover:shadow-hard-hover active:translate-x-0.5 active:translate-y-0.5 hover:-translate-x-0.5 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent-blue disabled:opacity-50"
-            >
-              {loading ? "Verifying..." : "Enable Multi-Factor"}
-            </button>
+            <div className="flex gap-4">
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 bg-accent-blue hover:bg-accent-blue/90 text-white font-semibold py-3 px-4 rounded-lg text-sm transition shadow-hard hover:shadow-hard-hover active:translate-x-0.5 active:translate-y-0.5 hover:-translate-x-0.5 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent-blue disabled:opacity-50"
+              >
+                {loading ? "Verifying..." : "Enable MFA"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (user) {
+                    if (user.role === "admin") {
+                      router.replace("/dashboard/admin");
+                    } else if (user.role === "staff") {
+                      router.replace("/dashboard/staff");
+                    } else if (user.role === "pres_ops_staff") {
+                      router.replace("/dashboard/pres-ops");
+                    }
+                  }
+                }}
+                className="flex-1 bg-transparent hover:bg-bg-primary text-text-secondary hover:text-text-primary border border-border-soft hover:border-accent-slate py-3 px-4 rounded-lg text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-accent-blue shadow-hard-sm"
+              >
+                Skip MFA
+              </button>
+            </div>
           </form>
         )}
       </div>

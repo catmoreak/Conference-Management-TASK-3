@@ -78,7 +78,9 @@ export const auth = betterAuth({
     twoFactor({
       issuer: "Conference Management",
     }),
-    admin(),
+    admin({
+      defaultRole: "staff",
+    }),
   ],
 
   // ── Database hooks ──────────────────────────────────────────────────
@@ -159,6 +161,12 @@ export const auth = betterAuth({
 
       if (path === "/change-password") {
         const userId = ctx.context?.session?.user?.id ?? null;
+        if (responseOk && userId) {
+          await db.user.update({
+            where: { id: userId },
+            data: { mustResetPassword: false },
+          });
+        }
         await writeAuditLog({
           actor_id: userId,
           action: "PASSWORD_CHANGE",
