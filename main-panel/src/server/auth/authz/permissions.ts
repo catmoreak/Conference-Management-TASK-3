@@ -1,11 +1,11 @@
-import type { Role, ScopeType, ServiceId } from "./types.js";
-
 /**
- * The permission catalogue. This is the ONLY place permission strings are
- * declared. Handlers, middleware, and WS guards must reference these named
- * constants (or the Permission union), never a role name, and never a raw
- * string literal typed by hand at the call site.
+ * Ported from server/src/auth/permissions.ts, unchanged except where noted.
+ * This is the ONLY place permission strings are declared for the
+ * reconciled model. Not wired to any route yet.
  */
+
+import type { Role, ScopeType, ServiceId } from "./types";
+
 export const PERMISSIONS = [
   "event:create",
   "event:read",
@@ -45,9 +45,10 @@ export function isKnownPermission(value: string): value is Permission {
 /**
  * Which scope_type(s) satisfy each permission, independent of role. A
  * 'global' assignment always satisfies any permission regardless of this
- * list. Omitting a scope kind here is how a cascade is *prevented*: e.g.
- * 'playback:control' only lists 'session', so an event_admin's event-scoped
- * grant can never satisfy it, no matter what fields a resource carries.
+ * list (subject to the tenant precondition in authorize.ts). "session"
+ * here refers to LiveSession (see types.ts) -- the string value itself is
+ * unchanged from server/'s original to avoid touching every scope-matching
+ * call site over a naming preference.
  */
 export const PERMISSION_ALLOWED_SCOPES: Record<Permission, readonly ScopeType[]> = {
   "event:create": [],
@@ -75,7 +76,7 @@ export const PERMISSION_ALLOWED_SCOPES: Record<Permission, readonly ScopeType[]>
   "submission:read_approved": [],
 };
 
-/** Permissions denied once the target submission's status is 'approved', for every actor except a global-scope (system_admin) grant. */
+/** Permissions denied once the target submission's status is 'approved', for every actor except a global-scope grant. */
 export const STATE_GUARDED_PERMISSIONS: ReadonlySet<Permission> = new Set([
   "submission:update",
   "submission:delete",
@@ -96,10 +97,23 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "submission:download",
   ],
   reviewer: ["event:read", "session:read", "submission:read", "submission:download", "submission:approve", "submission:reject"],
-  operator: ["session:read", "playback:control", "playback:read"],
+  // audit:read added to operator/event_admin (2026-08 reconciliation): the
+  // old model's dashboard:view was granted to staff/pres_ops_staff too, and
+  // the pilot (audit/route.ts) confirmed neither new role had an equivalent
+  // -- no comment/ADR/test anywhere signals this was deliberate exclusion
+  // (unlike playback:control, which IS explicitly documented as excluded
+  // from event_admin -- see the PERMISSION_ALLOWED_SCOPES comment above).
+  operator: ["session:read", "playback:control", "playback:read", "audit:read"],
   event_admin: [
     "event:read",
     "event:update",
+    // event:create widened in (2026-08 reconciliation): no comment/ADR
+    // signals deliberate exclusion (unlike playback:control, which IS
+    // explicitly documented as excluded) -- reads as an original-catalogue
+    // gap, since a tenant-wide event_admin grant (the shape backfill
+    // produces) has no parent event to scope event:create against anyway,
+    // and nobody had reason to add the string until that grant shape existed.
+    "event:create",
     "session:create",
     "session:update",
     "session:read",
@@ -109,6 +123,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "presenter:read",
     "submission:read",
     "submission:download",
+    "audit:read",
   ],
   system_admin: PERMISSIONS.filter(
     (p) => p !== "submission:read_raw" && p !== "submission:write_derived" && p !== "submission:read_approved",
@@ -118,7 +133,7 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
 /** Roles event_admin's staff:assign may target. Enforced in authorize.ts, not just by scope. */
 export const ASSIGNABLE_BY_EVENT_ADMIN: ReadonlySet<Role> = new Set(["reception_staff", "reviewer", "operator"]);
 
-/** Static, code-only permission sets for non-human service principals. */
+/** Static, code-only permission sets for non-human service principals. Deliberately NOT rows in user_role_assignments -- see the migration comment on the `roles` table. */
 export const SERVICE_PERMISSIONS: Record<ServiceId, readonly Permission[]> = {
   "conversion-worker": ["submission:read_raw", "submission:write_derived"],
   "malware-scanner": ["submission:read_raw"],

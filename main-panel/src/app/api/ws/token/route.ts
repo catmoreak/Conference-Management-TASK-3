@@ -8,6 +8,11 @@ import { validateCsrf } from "~/server/auth/csrf";
 import { assertPermissions } from "~/server/auth/rbac";
 import { assertOnboardingComplete } from "~/server/auth/mfa-gate";
 import { mintWsToken } from "~/server/auth/ws-token";
+import { shadowCompare } from "~/server/auth/shadow-check";
+import { authorizeAndRun } from "~/server/auth/authz/authorize";
+import { PrismaAuthzStore } from "~/server/auth/authz/prisma-store";
+
+const authzStore = new PrismaAuthzStore();
 
 // ── Input validation ─────────────────────────────────────────────────────
 
@@ -70,7 +75,21 @@ export async function POST(request: Request) {
 
     // ── RBAC ─────────────────────────────────────────────────────────
     const role = user.role as string | undefined;
-    assertPermissions(role, "live-control:view");
+    const userId = String(session.user.id);
+    // live-control:view -> playback:read. resource=null here, not because
+    // there's no equivalent resource (liveSessionId, parsed below, maps
+    // directly onto the new LiveSession model) but because this check runs
+    // BEFORE body parsing in this route's existing control flow -- moving
+    // the check after parsing to resource-scope it properly would reorder
+    // the route's logic, out of scope for a shadow-only wiring pass. Real
+    // per-session scoping for this route is a follow-up, not done here.
+    await shadowCompare({
+      checkName: "ws/token:live-control-view",
+      actorId: userId,
+      legacy: () => assertPermissions(role, "live-control:view"),
+      candidate: () =>
+        authorizeAndRun({ kind: "user", userId }, "playback:read", null, authzStore, async () => true),
+    });
 
     // ── Input validation ─────────────────────────────────────────────
     const body: unknown = await request.json();

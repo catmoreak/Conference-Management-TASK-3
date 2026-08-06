@@ -8,6 +8,11 @@ import { db } from "~/server/db";
 import { writeAuditLog, extractIp, extractUserAgent } from "~/server/auth/audit";
 import { validateCsrf } from "~/server/auth/csrf";
 import { assertRole } from "~/server/auth/rbac";
+import { shadowCompare } from "~/server/auth/shadow-check";
+import { requireRoleGrant } from "~/server/auth/authz/authorize";
+import { PrismaAuthzStore } from "~/server/auth/authz/prisma-store";
+
+const authzStore = new PrismaAuthzStore();
 
 // ── Input validation schemas ──────────────────────────────────────────
 
@@ -62,7 +67,13 @@ export async function POST(request: Request) {
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    assertRole((session.user as Record<string, unknown>).role as string, "admin");
+    const userId = String((session.user as Record<string, unknown>).id);
+    await shadowCompare({
+      checkName: "admin/manage-account:assertRole",
+      actorId: userId,
+      legacy: () => assertRole((session.user as Record<string, unknown>).role as string, "admin"),
+      candidate: () => requireRoleGrant({ kind: "user", userId }, "system_admin", authzStore),
+    });
 
     const reqHeaders = await headers();
     const ip = extractIp(reqHeaders);

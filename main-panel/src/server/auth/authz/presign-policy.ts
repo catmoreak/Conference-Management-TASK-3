@@ -1,5 +1,9 @@
 /**
- * Maximum TTL for any S3 presigned URL minted through authorizeAndPresign.
+ * Ported from server/src/auth/presign-policy.ts, unchanged.
+ */
+
+/**
+ * Maximum TTL for any S3 presigned URL minted through the downloads route.
  *
  * The revocation gap: once a URL is minted, S3 has no mechanism to revoke it
  * early. If a submission is rejected, deleted, or a reviewer's event

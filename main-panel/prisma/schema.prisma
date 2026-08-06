@@ -40,17 +40,23 @@ model User {
   posts         Post[]
 
   // Extended fields
-  role              Role      @default(staff)
-  tenantId          String?   @map("tenant_id")
-  status            String    @default("active")
-  mustResetPassword Boolean   @default(false)
+  role              Role        @default(staff)
+  tenantId          String?     @map("tenant_id")
+  status            String      @default("active")
+  mustResetPassword Boolean     @default(false)
   twoFactorEnabled  Boolean?
   twoFactor         TwoFactor[]
 
   // Admin plugin fields
-  banned            Boolean?  @default(false)
-  banReason         String?
-  banExpires        DateTime?
+  banned     Boolean?  @default(false)
+  banReason  String?
+  banExpires DateTime?
+
+  // New scoped-authorization model (see ADR 0001 rewrite) -- additive
+  // alongside the flat `role`/`tenantId` columns above, which stay in place
+  // until every call site has cut over. Do not read this relation for
+  // authorization decisions yet; it is not wired to anything.
+  roleAssignments UserRoleAssignment[]
 
   @@unique([email])
   @@map("user")
@@ -132,3 +138,204 @@ model Verification {
   @@map("verification")
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// Reconciled authorization model -- ports server/'s scoped RBAC (see
+// server/src/auth/permissions.ts, server/migrations/0001_authz_core.sql)
+// into main-panel, adding tenant as an outer scoping layer server/ never
+// had. See server/docs/adr/0001-roles-in-postgres-not-cognito-groups.md
+// (pending rewrite) for the full reasoning.
+//
+// Named `AuthzRole` rather than `Role` to avoid colliding with the existing
+// `enum Role` above (User.role) -- that enum is the OLD flat model and stays
+// untouched until every call site listed in the migration plan has cut over
+// to the tables below.
+//
+// Purely additive: nothing here is read by any authorization decision yet.
+// ═══════════════════════════════════════════════════════════════════════
+
+// Reference table, not a Postgres enum -- adding a role is an INSERT, not
+// an ALTER TYPE migration. Mirrors server/'s `roles` table exactly.
+model AuthzRole {
+  name        String               @id
+  assignments UserRoleAssignment[]
+
+  @@map("roles")
+}
+
+// The single source of truth for "who can act as what, where, in which
+// tenant" once cut over. A user can hold multiple simultaneous rows (e.g.
+// reviewer on event A + operator on session B + own-scope on their own
+// submissions), which the old flat User.role/tenantId columns cannot
+// represent at all.
+//
+// tenantId is the addition server/'s original model never had:
+//   - non-null  => this grant applies only within that one tenant
+//   - null      => platform-wide (reserved for true cross-tenant operators,
+//                  mirrors main-panel's existing tenant.ts
+//                  `allowAdminCrossTenant` escape hatch)
+//
+// scopeType/scopeId are UNCHANGED from server/'s model:
+//   global  - matches any resource (within the tenant boundary above)
+//   event   - matches resource.eventId = scopeId
+//   session - matches resource.liveSessionId = scopeId (see LiveSession --
+//             renamed from server/'s plain "session" specifically to avoid
+//             colliding with better-auth's own Session/login-session model,
+//             which already exists in this schema)
+//   own     - matches resource.ownerId = user.id, ignoring scopeId
+//
+// scope_id_matches_scope_type and the tenant-consistency check live in the
+// migration SQL (see migration.sql) -- Prisma's schema language can't
+// express multi-column CHECK constraints, same limitation server/'s own
+// migration ran into.
+model UserRoleAssignment {
+  id     String @id @default(uuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role    String
+  roleRef AuthzRole @relation(fields: [role], references: [name])
+
+  tenantId String? @map("tenant_id")
+
+  scopeType String  @map("scope_type")
+  scopeId   String? @map("scope_id")
+
+  grantedBy String    @map("granted_by")
+  grantedAt DateTime  @default(now()) @map("granted_at")
+  expiresAt DateTime? @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  @@index([userId], map: "user_role_assignments_user_id_idx")
+  @@index([scopeType, scopeId], map: "user_role_assignments_scope_idx")
+  @@map("user_role_assignments")
+}
+
+// Minimal reference tables so scoped grants and resource resolvers have
+// something real to resolve against -- matches server/'s own "minimal, not
+// the full feature schema" scope for its events/sessions/submissions
+// tables. Full event/session/submission feature fields (scheduling detail,
+// file versions, conversion status, etc.) are out of scope here.
+model Event {
+  id       String @id @default(uuid())
+  tenantId String @map("tenant_id")
+  name     String
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  liveSessions LiveSession[]
+  submissions  Submission[]
+
+  @@index([tenantId], map: "events_tenant_id_idx")
+  @@map("events")
+}
+
+// Named LiveSession, not Session -- this schema already has better-auth's
+// Session model (login sessions: id/expiresAt/token/userId), a completely
+// different concept from "a specific talk/presentation slot an operator is
+// assigned to". Confirmed as the right name, not a cold guess: main-panel's
+// own src/app/api/ws/token/route.ts already uses the parameter name
+// `liveSessionId`, and its comment already says "When a LiveSession model
+// is added, look up the session's tenantId..." -- this model is what that
+// comment was waiting on.
+//
+// tenantId is deliberately NOT duplicated onto this model (or Submission) --
+// it's derived through the Event relation so it can't drift out of sync
+// with its parent event's tenant. Resource resolvers building an
+// AuthzResource read it via `liveSession.event.tenantId`.
+model LiveSession {
+  id      String @id @default(uuid())
+  eventId String @map("event_id")
+  event   Event  @relation(fields: [eventId], references: [id])
+  name    String
+
+  startsAt DateTime? @map("starts_at")
+  endsAt   DateTime? @map("ends_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  submissions Submission[]
+
+  @@index([eventId], map: "live_sessions_event_id_idx")
+  @@map("live_sessions")
+}
+
+model Submission {
+  id      String @id @default(uuid())
+  eventId String @map("event_id")
+  event   Event  @relation(fields: [eventId], references: [id])
+
+  liveSessionId String?      @map("session_id")
+  liveSession   LiveSession? @relation(fields: [liveSessionId], references: [id])
+
+  ownerId   String @map("owner_id")
+  createdBy String @map("created_by")
+
+  // pending | approved | rejected -- CHECK constraint added in migration.sql
+  status String @default("pending")
+
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@index([eventId], map: "submissions_event_id_idx")
+  @@index([liveSessionId], map: "submissions_session_id_idx")
+  @@index([ownerId], map: "submissions_owner_id_idx")
+  @@map("submissions")
+}
+
+// Every authorization decision -- allow or deny -- made through
+// authorize.ts's canUserPerform/authorizeMutationAndRun produces a row here.
+// permission and resourceType/resourceId are plain text, not FKs: a request
+// for an unknown permission string, or against a resource that doesn't
+// exist, must still be auditable as a denial. Matches server/'s audit_log
+// table (server/migrations/0001_authz_core.sql) 1:1 -- kept as a SEPARATE
+// model from the existing general-purpose AuditLog (account changes, MFA
+// resets, WS token mints), not merged into it: AuditLog's shape (free-text
+// action/result) and this one's shape (structured decision/permission/
+// resource fields, written transactionally with mutations) serve different
+// purposes. Not wired to any route yet.
+model AuthzAuditLog {
+  id String @id @default(uuid())
+
+  actorType String @map("actor_type") // user | service
+  actorId   String @map("actor_id")
+
+  permission   String
+  resourceType String? @map("resource_type")
+  resourceId   String? @map("resource_id")
+
+  decision String // allow | deny
+  reason   String
+
+  occurredAt DateTime @default(now()) @map("occurred_at")
+
+  @@index([occurredAt], map: "authz_audit_log_occurred_at_idx")
+  @@index([actorType, actorId], map: "authz_audit_log_actor_idx")
+  @@map("authz_audit_log")
+}
+
+// Durable log for the migration-window shadow-check harness (see
+// src/server/auth/shadow-check.ts): every time the OLD rbac.ts check and
+// the NEW authz-module check disagree on the same question, a row lands
+// here instead of only a console line, so disagreements are queryable
+// during the plan's step-4 cutover window rather than lost in serverless
+// function logs. Not itself part of any authorization decision -- purely
+// observational.
+model AuthzShadowMismatch {
+  id String @id @default(uuid())
+
+  checkName String @map("check_name")
+  actorId   String @map("actor_id")
+
+  legacyAllowed Boolean @map("legacy_allowed")
+  legacyReason  String? @map("legacy_reason")
+
+  candidateAllowed Boolean @map("candidate_allowed")
+  candidateReason  String? @map("candidate_reason")
+
+  occurredAt DateTime @default(now()) @map("occurred_at")
+
+  @@index([checkName], map: "authz_shadow_mismatches_check_name_idx")
+  @@index([occurredAt], map: "authz_shadow_mismatches_occurred_at_idx")
+  @@map("authz_shadow_mismatches")
+}

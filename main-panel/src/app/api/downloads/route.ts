@@ -12,11 +12,12 @@ import {
   isS3Configured,
   type FileType,
 } from "~/server/storage/s3-client";
+import { shadowCompare } from "~/server/auth/shadow-check";
+import { authorizeAndRun } from "~/server/auth/authz/authorize";
+import { PrismaAuthzStore } from "~/server/auth/authz/prisma-store";
+import { PRESIGNED_URL_TTL_SECONDS } from "~/server/auth/authz/presign-policy";
 
-// ── Presign TTL (imported from server/src/auth/presign-policy.ts value) ──
-// Kept in sync with the server package's PRESIGNED_URL_TTL_SECONDS = 300.
-// If that ever changes, update this constant to match.
-const PRESIGNED_URL_TTL_SECONDS = 300;
+const authzStore = new PrismaAuthzStore();
 
 // ── Input validation ─────────────────────────────────────────────────────
 
@@ -85,7 +86,19 @@ export async function POST(request: Request) {
 
     // ── RBAC ─────────────────────────────────────────────────────────
     const role = user.role as string | undefined;
-    assertPermissions(role, "material:download");
+    const userId = String(session.user.id);
+    // material:download -> submission:download: confirmed equivalence (not
+    // assumed) -- see the material/submission gap analysis. resource=null:
+    // this route's fileId comes from a stubbed S3 flow with no Submission
+    // row to resolve yet, so only a global-scope grant can satisfy this,
+    // same as audit/route.ts's audit:read.
+    await shadowCompare({
+      checkName: "downloads:material-download",
+      actorId: userId,
+      legacy: () => assertPermissions(role, "material:download"),
+      candidate: () =>
+        authorizeAndRun({ kind: "user", userId }, "submission:download", null, authzStore, async () => true),
+    });
 
     // ── Input validation ─────────────────────────────────────────────
     const body: unknown = await request.json();

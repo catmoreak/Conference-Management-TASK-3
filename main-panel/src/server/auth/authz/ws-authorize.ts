@@ -1,9 +1,17 @@
-import { canUserPerform, recordAuditBestEffort } from "./authorize.js";
-import type { Actor, AuthzDecision, AuthzResource, AuthzStore, Permission } from "./types.js";
+/**
+ * Ported from server/src/auth/ws-authorize.ts, unchanged. Not wired to any
+ * live WebSocket server yet -- podium's WebSocketClient.ts is the client
+ * side of this protocol; a server-side handler that calls authorizeWsMessage
+ * per inbound message still needs to be built.
+ */
+
+import { canUserPerform, recordAuditBestEffort } from "./authorize";
+import type { Actor, AuthzDecision, AuthzResource, AuthzStore, Permission } from "./types";
 
 /**
- * Identity bound to a WebSocket connection at $connect time (Cognito
- * authorizer for humans, service credential for podium-app).
+ * Identity bound to a WebSocket connection at $connect time (verified via
+ * ws-token.ts's verifyWsToken for humans, or a service credential for
+ * podium-app).
  *
  * Contract for real implementations: getActor must return the identity
  * established once at $connect, unchanged, until the connection is

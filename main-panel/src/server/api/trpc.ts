@@ -15,6 +15,11 @@ import { auth } from "~/server/better-auth";
 import { db } from "~/server/db";
 import { assertOnboardingComplete } from "~/server/auth/mfa-gate";
 import { assertPermissions, type Permission } from "~/server/auth/rbac";
+import { shadowCompare } from "~/server/auth/shadow-check";
+import { requireAnyRoleGrant } from "~/server/auth/authz/authorize";
+import { PrismaAuthzStore } from "~/server/auth/authz/prisma-store";
+
+const authzStore = new PrismaAuthzStore();
 
 /**
  * 1. CONTEXT
@@ -231,19 +236,33 @@ export const staffProcedure = authedProcedure.use(({ ctx, next }) => {
  *
  * Usage: pass required permissions as a generic check at the router level.
  */
-export const presOpsProcedure = authedProcedure.use(({ ctx, next }) => {
+export const presOpsProcedure = authedProcedure.use(async ({ ctx, next }) => {
   // All three roles are allowed to reach this procedure;
   // fine-grained permission checks happen at the individual route level
   // using assertPermissions(role, ...requiredPermissions).
+  //
+  // NOTE: this procedure is not currently used by any router (verified --
+  // zero call sites outside this definition), so the shadowCompare wiring
+  // below cannot be exercised against a live server. Wired anyway so it's
+  // ready the moment this procedure is actually used, not discovered as a
+  // gap later.
   const role = (ctx.session.user as Record<string, unknown>).role as
     | string
     | undefined;
-  if (role !== "admin" && role !== "staff" && role !== "pres_ops_staff") {
-    throw new TRPCError({
-      code: "FORBIDDEN",
-      message: "Access denied for your role",
-    });
-  }
+  const userId = String((ctx.session.user as Record<string, unknown>).id);
+  await shadowCompare({
+    checkName: "trpc:presOpsProcedure",
+    actorId: userId,
+    legacy: () => {
+      if (role !== "admin" && role !== "staff" && role !== "pres_ops_staff") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Access denied for your role",
+        });
+      }
+    },
+    candidate: () => requireAnyRoleGrant({ kind: "user", userId }, authzStore),
+  });
   return next({ ctx });
 });
 

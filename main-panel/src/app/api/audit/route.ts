@@ -3,6 +3,13 @@ import { getSession } from "~/server/better-auth/server";
 import { db } from "~/server/db";
 import { validateCsrf } from "~/server/auth/csrf";
 import { assertPermissions } from "~/server/auth/rbac";
+import { shadowCompare } from "~/server/auth/shadow-check";
+import { authorizeAndRun } from "~/server/auth/authz/authorize";
+import { PrismaAuthzStore } from "~/server/auth/authz/prisma-store";
+
+// Pilot call site for step 4 (see CUTOVER_GATE.md). One store instance,
+// reused across requests -- it holds no per-request state.
+const authzStore = new PrismaAuthzStore();
 
 /**
  * GET /api/audit
@@ -29,8 +36,25 @@ export async function GET(request: Request) {
     }
 
     const user = session.user as Record<string, unknown>;
-    // Staff and Admin are allowed to view audit logs per Stage 2 RBAC
-    assertPermissions(user.role as string, "dashboard:view");
+    const userId = String(user.id);
+
+    // PILOT (step 4, CUTOVER_GATE.md gate not yet met -- legacy stays
+    // authoritative). "dashboard:view" (legacy) has no equivalent in the
+    // new catalogue -- it's mapped here to "audit:read", the closest match
+    // for what this route actually does; the new catalogue's permissions
+    // are more specific than the old blanket "can see the dashboard" one.
+    // Expect mismatches until real users are backfilled into
+    // user_role_assignments -- that backfill is a separate prerequisite
+    // this pilot deliberately does not paper over; it's here to prove the
+    // wiring and the mismatch-logging mechanism work, not to claim
+    // agreement that doesn't exist yet.
+    await shadowCompare({
+      checkName: "audit/route:dashboard-view",
+      actorId: userId,
+      legacy: () => assertPermissions(user.role as string, "dashboard:view"),
+      candidate: () =>
+        authorizeAndRun({ kind: "user", userId }, "audit:read", null, authzStore, async () => true),
+    });
 
     // Parse URL query parameters
     const { searchParams } = new URL(request.url);
