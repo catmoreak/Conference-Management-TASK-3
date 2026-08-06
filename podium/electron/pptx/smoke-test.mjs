@@ -1,11 +1,11 @@
-// Manual smoke test for PptxController against the PoC's test_deck.pptx.
+// Manual smoke test for PptxController against the fixture test_deck.pptx.
 // Run: node smoke-test.mjs
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PptxController } from "./pptxController.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const deckPath = path.join(__dirname, "..", "..", "..", "com-poc", "test_deck.pptx");
+const deckPath = path.join(__dirname, "test", "fixtures", "test_deck.pptx");
 
 const podium = new PptxController();
 podium.on("status", (s) => console.log("[status]", JSON.stringify(s)));

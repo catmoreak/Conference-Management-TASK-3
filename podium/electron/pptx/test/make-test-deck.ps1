@@ -9,7 +9,7 @@ param(
     [Parameter(Mandatory = $true)][string]$OutputPptx,
     [Parameter(Mandatory = $true)][int]$SlideCount,
     [int[]]$VideoSlideNumbers = @(),
-    [string]$VideoPath = "$PSScriptRoot\..\..\..\..\com-poc\test_clip_trimmed.mp4"
+    [string]$VideoPath = "$PSScriptRoot\fixtures\test_clip_trimmed.mp4"
 )
 
 $ppLayoutTitle = 1
