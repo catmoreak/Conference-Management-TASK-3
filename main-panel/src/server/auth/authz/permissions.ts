@@ -103,7 +103,14 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   // -- no comment/ADR/test anywhere signals this was deliberate exclusion
   // (unlike playback:control, which IS explicitly documented as excluded
   // from event_admin -- see the PERMISSION_ALLOWED_SCOPES comment above).
-  operator: ["session:read", "playback:control", "playback:read", "audit:read"],
+  operator: [
+    "session:read",
+    "playback:control",
+    "playback:read",
+    "audit:read",
+    "submission:read",
+    "submission:download",
+  ],
   event_admin: [
     "event:read",
     "event:update",
