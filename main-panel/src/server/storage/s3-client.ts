@@ -1,11 +1,6 @@
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+
 /**
- * S3/MinIO presigned URL client — STUB.
- *
- * This module defines the interface for minting presigned download URLs.
- * The actual AWS SDK integration (@aws-sdk/client-s3 and
- * @aws-sdk/s3-request-presigner) will be installed and wired up when
- * MinIO is configured for local dev.
- *
  * S3 key pattern (SEC-011):
  *   {tenantId}/{fileType}/{fileId}/{randomId}
  *
@@ -32,6 +27,27 @@ export interface PresignDownloadOptions {
   ttlSeconds: number;
 }
 
+export interface UploadObjectOptions {
+  objectKey: string;
+  body: Buffer;
+  contentType: string;
+  metadata?: Record<string, string>;
+}
+
+export interface UploadObjectResult {
+  objectKey: string;
+  bucket: string;
+  etag?: string;
+}
+
+function hasStaticCredentials(): boolean {
+  return Boolean(process.env.S3_ACCESS_KEY_ID && process.env.S3_SECRET_ACCESS_KEY);
+}
+
+function isAnonymousUploadEnabled(): boolean {
+  return process.env.S3_ALLOW_ANONYMOUS_PUT === "true";
+}
+
 // ── S3 configuration check ───────────────────────────────────────────────
 
 /**
@@ -41,10 +57,95 @@ export interface PresignDownloadOptions {
 export function isS3Configured(): boolean {
   return !!(
     process.env.S3_ENDPOINT &&
-    process.env.S3_BUCKET &&
-    process.env.S3_ACCESS_KEY_ID &&
-    process.env.S3_SECRET_ACCESS_KEY
+    process.env.S3_BUCKET
   );
+}
+
+function getS3Client(): S3Client {
+  if (!isS3Configured()) {
+    throw new Error("S3 is not configured");
+  }
+
+  const accessKeyId = process.env.S3_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
+  const useStaticCredentials = hasStaticCredentials();
+
+  return new S3Client({
+    endpoint: process.env.S3_ENDPOINT,
+    region: process.env.S3_REGION ?? "us-east-1",
+    forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
+    ...(useStaticCredentials
+      ? {
+          credentials: {
+            accessKeyId: accessKeyId!,
+            secretAccessKey: secretAccessKey!,
+          },
+        }
+      : {}),
+  });
+}
+
+export async function uploadObjectToS3(
+  options: UploadObjectOptions,
+): Promise<UploadObjectResult> {
+  if (!isS3Configured()) {
+    throw new Error("S3 is not configured");
+  }
+
+  const bucket = process.env.S3_BUCKET!;
+  if (!hasStaticCredentials() && isAnonymousUploadEnabled()) {
+    const publicUrl = getPublicObjectUrl(options.objectKey);
+    if (!publicUrl) {
+      throw new Error("S3_PUBLIC_BASE_URL is required when S3_ALLOW_ANONYMOUS_PUT=true");
+    }
+
+    const response = await fetch(publicUrl, {
+      method: "PUT",
+      body: new Uint8Array(options.body),
+      headers: {
+        "Content-Type": options.contentType,
+      },
+    });
+
+    if (!response.ok) {
+      const responseText = await response.text();
+      throw new Error(
+        `Anonymous S3 upload failed (${response.status}): ${responseText.slice(0, 300)}`,
+      );
+    }
+
+    return {
+      objectKey: options.objectKey,
+      bucket,
+      etag: response.headers.get("etag") ?? undefined,
+    };
+  }
+
+  const client = getS3Client();
+
+  const command = new PutObjectCommand({
+    Bucket: bucket,
+    Key: options.objectKey,
+    Body: options.body,
+    ContentType: options.contentType,
+    Metadata: options.metadata,
+  });
+
+  const result = await client.send(command);
+
+  return {
+    objectKey: options.objectKey,
+    bucket,
+    etag: result.ETag,
+  };
+}
+
+export function getPublicObjectUrl(objectKey: string): string | null {
+  const baseUrl = process.env.S3_PUBLIC_BASE_URL?.replace(/\/+$/, "");
+  if (!baseUrl) {
+    return null;
+  }
+  return `${baseUrl}/${objectKey}`;
 }
 
 // ── Presigned URL minting ────────────────────────────────────────────────
