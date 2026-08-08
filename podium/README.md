@@ -19,7 +19,14 @@ npm install
 ```
 > *This will install React, Vite, and download the Electron pre-built binary automatically.*
 
-### 3. Start the application (Dev Mode)
+### 3. Configure the main-panel auth URL
+Create a `.env` file next to `package.json` and set:
+```bash
+VITE_MAIN_PANEL_URL="http://localhost:3000"
+```
+Point this at the running main-panel server in development or production.
+
+### 4. Start the application (Dev Mode)
 ```bash
 npm run dev
 ```

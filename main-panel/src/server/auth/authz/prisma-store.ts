@@ -14,6 +14,7 @@
 
 import { db } from "~/server/db";
 import type { Prisma } from "../../../../generated/prisma";
+import { isPrismaMissingTableError } from "../prisma-errors";
 import type { AuditLogEntry, AuthzStore, AuthzTransaction, Role, RoleAssignment, ScopeType } from "./types";
 
 interface AssignmentRow {
@@ -46,33 +47,50 @@ function auditData(entry: AuditLogEntry) {
 
 export class PrismaAuthzStore implements AuthzStore {
   async getActiveAssignments(userId: string): Promise<RoleAssignment[]> {
-    const rows = await db.$queryRaw<AssignmentRow[]>`
-      select role, scope_type, scope_id, tenant_id
-        from user_role_assignments
-       where user_id = ${userId}
-         and revoked_at is null
-         and (expires_at is null or expires_at > now())
-    `;
+    let rows: AssignmentRow[];
+    try {
+      rows = await db.$queryRaw<AssignmentRow[]>`
+        select role, scope_type, scope_id, tenant_id
+          from user_role_assignments
+         where user_id = ${userId}
+           and revoked_at is null
+           and (expires_at is null or expires_at > now())
+      `;
+    } catch (error) {
+      if (isPrismaMissingTableError(error)) return [];
+      throw error;
+    }
     return rows.map(toRoleAssignment);
   }
 
   async hasActiveOperatorForLiveSession(liveSessionId: string): Promise<boolean> {
-    const rows = await db.$queryRaw<{ found: boolean }[]>`
-      select exists (
-        select 1
-          from user_role_assignments
-         where role = 'operator'
-           and scope_type = 'session'
-           and scope_id = ${liveSessionId}
-           and revoked_at is null
-           and (expires_at is null or expires_at > now())
-      ) as found
-    `;
+    let rows: { found: boolean }[];
+    try {
+      rows = await db.$queryRaw<{ found: boolean }[]>`
+        select exists (
+          select 1
+            from user_role_assignments
+           where role = 'operator'
+             and scope_type = 'session'
+             and scope_id = ${liveSessionId}
+             and revoked_at is null
+             and (expires_at is null or expires_at > now())
+        ) as found
+      `;
+    } catch (error) {
+      if (isPrismaMissingTableError(error)) return false;
+      throw error;
+    }
     return rows[0]?.found ?? false;
   }
 
   async recordAuditLog(entry: AuditLogEntry): Promise<void> {
-    await db.authzAuditLog.create({ data: auditData(entry) });
+    try {
+      await db.authzAuditLog.create({ data: auditData(entry) });
+    } catch (error) {
+      if (isPrismaMissingTableError(error)) return;
+      throw error;
+    }
   }
 
   async runInTransaction<T>(fn: (tx: AuthzTransaction) => Promise<T>): Promise<T> {
@@ -80,7 +98,12 @@ export class PrismaAuthzStore implements AuthzStore {
       const tx: AuthzTransaction = {
         connection: prismaTx,
         recordAuditLog: async (entry) => {
-          await prismaTx.authzAuditLog.create({ data: auditData(entry) });
+          try {
+            await prismaTx.authzAuditLog.create({ data: auditData(entry) });
+          } catch (error) {
+            if (isPrismaMissingTableError(error)) return;
+            throw error;
+          }
         },
       };
       return fn(tx);

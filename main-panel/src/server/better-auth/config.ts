@@ -3,11 +3,17 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { twoFactor, admin } from "better-auth/plugins";
 import { createAuthMiddleware } from "better-auth/api";
 
+import { env } from "~/env";
 import { db } from "~/server/db";
 import { writeAuditLog, extractIp, extractUserAgent } from "~/server/auth/audit";
 
 export const auth = betterAuth({
   appName: "Conference Management",
+  baseURL: env.BETTER_AUTH_URL ?? "http://localhost:3000",
+  trustedOrigins: [
+    env.PODIUM_APP_URL ?? "http://localhost:5173",
+    "http://127.0.0.1:5173",
+  ],
   database: prismaAdapter(db, {
     provider: "postgresql",
   }),
@@ -29,7 +35,7 @@ export const auth = betterAuth({
   // ── Cookie security ─────────────────────────────────────────────────
   advanced: {
     defaultCookieAttributes: {
-      secure: process.env.NODE_ENV === "production",
+      secure: env.NODE_ENV === "production",
       httpOnly: true,
       sameSite: "lax",
     },

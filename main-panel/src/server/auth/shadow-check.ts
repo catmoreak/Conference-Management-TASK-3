@@ -19,6 +19,7 @@
  */
 
 import { db } from "~/server/db";
+import { isPrismaMissingTableError } from "./prisma-errors";
 
 interface SafeResult<T> {
   allowed: boolean;
@@ -77,6 +78,7 @@ async function logMismatchToDb(entry: MismatchLogEntry): Promise<void> {
       },
     });
   } catch (error) {
+    if (isPrismaMissingTableError(error)) return;
     console.error("[shadow-check] Failed to log mismatch:", error);
   }
 }
