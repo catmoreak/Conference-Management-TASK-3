@@ -76,7 +76,7 @@ app.whenReady().then(() => {
 
   if (process.platform === 'win32') {
     app.setLoginItemSettings({
-      openAtLogin: true,
+      openAtLogin: false,
       path: app.getPath('exe'),
     });
   }
