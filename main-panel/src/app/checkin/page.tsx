@@ -103,7 +103,7 @@ export default function CheckinPage() {
       const formData = new FormData();
       formData.append("file", selectedFile);
       formData.append("presenterId", selectedPresenter.id);
-      const res = await fetch("/api/uploads", { method: "POST", body: formData });
+      const res = await fetch("/api/checkin/upload", { method: "POST", body: formData });
       const data = await res.json() as { success?: boolean; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Upload failed");
       setUploadResult(selectedFile.name);

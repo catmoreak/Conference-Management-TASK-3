@@ -5,9 +5,23 @@ import https from 'https';
 import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { PptxController } from './electron/pptx/pptxController.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Singleton -- one COM-automation-driven PowerPoint instance per podium
+// device. Status/error events are forwarded to whichever renderer window
+// is currently open.
+const pptxController = new PptxController();
+let mainWindowRef = null;
+
+pptxController.on('status', (status) => {
+  mainWindowRef?.webContents.send('podium-status', status);
+});
+pptxController.on('error', (error) => {
+  mainWindowRef?.webContents.send('podium-error', error);
+});
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 let powerSaveBlockerId = null;
@@ -72,6 +86,13 @@ function createWindow() {
   if (!isKioskRequested) {
     mainWindow.setMenuBarVisibility(false);
   }
+
+  mainWindowRef = mainWindow;
+  mainWindow.on('closed', () => {
+    if (mainWindowRef === mainWindow) {
+      mainWindowRef = null;
+    }
+  });
 }
 
 function downloadFile(url, destPath) {
@@ -105,6 +126,25 @@ function downloadFile(url, destPath) {
 const presentationWindows = new Map();
 
 app.whenReady().then(() => {
+  ipcMain.handle('podium-command', async (_event, cmd) => {
+    try {
+      if (cmd.type === 'load_presentation') {
+        // worker.ps1's PowerPoint COM automation requires a local
+        // filesystem path -- it cannot open a remote fileUrl directly.
+        const tmpDir = os.tmpdir();
+        const safeName = (cmd.presentationId || 'presentation') + '.pptx';
+        const destPath = path.join(tmpDir, `podium_${Date.now()}_${safeName}`);
+        await downloadFile(cmd.fileUrl, destPath);
+        await pptxController.executeCommand({ ...cmd, fileUrl: destPath });
+      } else {
+        await pptxController.executeCommand(cmd);
+      }
+      return { success: true, status: pptxController.getStatus() };
+    } catch (err) {
+      return { success: false, error: err?.message ?? String(err) };
+    }
+  });
+
   ipcMain.handle('open-file-for-presentation', async (_event, { url, filename }) => {
     try {
       const tmpDir = os.tmpdir();

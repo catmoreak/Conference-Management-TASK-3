@@ -5,6 +5,7 @@ import { roomRouter } from "~/server/api/routers/room";
 import { liveSessionRouter } from "~/server/api/routers/liveSession";
 import { presenterRouter } from "~/server/api/routers/presenter";
 import { presentationAssignmentRouter } from "~/server/api/routers/presentationAssignment";
+import { submissionRouter } from "~/server/api/routers/submission";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 
 /**
@@ -20,6 +21,7 @@ export const appRouter = createTRPCRouter({
   liveSession: liveSessionRouter,
   presenter: presenterRouter,
   presentationAssignment: presentationAssignmentRouter,
+  submission: submissionRouter,
 });
 
 // export type definition of API

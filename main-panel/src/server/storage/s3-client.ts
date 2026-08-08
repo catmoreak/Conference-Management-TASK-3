@@ -1,4 +1,5 @@
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 /**
  * S3 key pattern (SEC-011):
@@ -153,53 +154,27 @@ export function getPublicObjectUrl(objectKey: string): string | null {
 /**
  * Generate a presigned download URL for an S3 object.
  *
- * TODO: Replace this stub with a real AWS SDK v3 implementation when
- * MinIO is set up for local dev. Install:
- *   npm install @aws-sdk/client-s3 @aws-sdk/s3-request-presigner
- *
- * Implementation outline:
- * ```typescript
- * import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
- * import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
- *
- * const client = new S3Client({
- *   endpoint: process.env.S3_ENDPOINT,
- *   region: process.env.S3_REGION ?? "us-east-1",
- *   credentials: {
- *     accessKeyId: process.env.S3_ACCESS_KEY_ID!,
- *     secretAccessKey: process.env.S3_SECRET_ACCESS_KEY!,
- *   },
- *   forcePathStyle: true, // Required for MinIO
- * });
- *
- * const command = new GetObjectCommand({
- *   Bucket: process.env.S3_BUCKET,
- *   Key: opts.objectKey,
- * });
- *
- * const url = await getSignedUrl(client, command, {
- *   expiresIn: opts.ttlSeconds,
- * });
- * ```
- *
- * @returns PresignedUrlResult, or null if S3 is not configured.
+ * @returns PresignedUrlResult, or null if S3 is not configured or the
+ *   object key is missing.
  */
 export async function getPresignedDownloadUrl(
   opts: PresignDownloadOptions,
 ): Promise<PresignedUrlResult | null> {
-  if (!isS3Configured()) {
+  if (!isS3Configured() || !opts.objectKey) {
     return null;
   }
 
-  // TODO: Replace with real S3 presigning once @aws-sdk is installed.
-  // This stub should never be reached in production without S3 configured,
-  // but if it somehow is, return null to trigger the 501 response.
-  console.warn(
-    "[S3_STUB] getPresignedDownloadUrl called but AWS SDK is not installed. " +
-      "Install @aws-sdk/client-s3 and @aws-sdk/s3-request-presigner, then " +
-      "replace this stub in src/server/storage/s3-client.ts.",
-  );
-  return null;
+  const client = getS3Client();
+  const command = new GetObjectCommand({
+    Bucket: process.env.S3_BUCKET!,
+    Key: opts.objectKey,
+  });
+
+  const url = await getSignedUrl(client, command, {
+    expiresIn: opts.ttlSeconds,
+  });
+
+  return { url, expiresIn: opts.ttlSeconds };
 }
 
 /**

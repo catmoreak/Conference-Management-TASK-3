@@ -330,6 +330,7 @@ model Presenter {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   presentationAssignments PresentationAssignment[]
+  submissions             Submission[]
 
   @@index([eventId], map: "presenters_event_id_idx")
   @@map("presenters")
@@ -363,11 +364,21 @@ model Submission {
   liveSessionId String?      @map("session_id")
   liveSession   LiveSession? @relation(fields: [liveSessionId], references: [id])
 
+  presenterId String?    @map("presenter_id")
+  presenter   Presenter? @relation(fields: [presenterId], references: [id])
+
   ownerId   String @map("owner_id")
   createdBy String @map("created_by")
 
   // pending | approved | rejected -- CHECK constraint added in migration.sql
   status String @default("pending")
+
+  // File metadata -- populated by the check-in kiosk upload flow.
+  objectKey   String? @map("object_key")
+  fileName    String? @map("file_name")
+  fileSize    Int?    @map("file_size")
+  contentType String? @map("content_type")
+  publicUrl   String? @map("public_url")
 
   deletedAt DateTime? @map("deleted_at")
   createdAt DateTime  @default(now()) @map("created_at")
@@ -376,6 +387,7 @@ model Submission {
   @@index([eventId], map: "submissions_event_id_idx")
   @@index([liveSessionId], map: "submissions_session_id_idx")
   @@index([ownerId], map: "submissions_owner_id_idx")
+  @@index([presenterId], map: "submissions_presenter_id_idx")
   @@map("submissions")
 }
 

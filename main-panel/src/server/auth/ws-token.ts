@@ -33,6 +33,9 @@ const WS_TOKEN_DEFAULT_TTL = 120;
 
 // ── Types ────────────────────────────────────────────────────────────────
 
+/** Which side of the podium protocol this connection is minted for. */
+export type WsTokenPurpose = "control" | "display";
+
 export interface WsTokenPayload {
   /** User ID (Better Auth user.id). */
   sub: string;
@@ -44,6 +47,13 @@ export interface WsTokenPayload {
   role: string;
   /** User's tenantId at mint time. */
   tenantId: string;
+  /**
+   * Which side of the podium protocol this connection may act as.
+   * Set once at mint time by the authenticated caller of /api/ws/token
+   * (not client-asserted at connect time) -- the WS server uses this,
+   * not the handshake's actorType, to decide control vs. display.
+   */
+  purpose: WsTokenPurpose;
   /** Issued-at (unix seconds). */
   iat: number;
   /** Expiration (unix seconds). */
@@ -55,6 +65,7 @@ export interface MintWsTokenOptions {
   liveSessionId: string;
   role: string;
   tenantId: string;
+  purpose: WsTokenPurpose;
   /** TTL in seconds. Clamped to [60, 300]. Defaults to 120. */
   ttlSeconds?: number;
 }
@@ -107,6 +118,7 @@ export async function mintWsToken(opts: MintWsTokenOptions): Promise<string> {
     scope: opts.liveSessionId,
     role: opts.role,
     tenantId: opts.tenantId,
+    purpose: opts.purpose,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(opts.userId)
@@ -150,6 +162,7 @@ export async function verifyWsToken(
       scope: (raw as Record<string, unknown>)["scope"] as string ?? "",
       role: (raw as Record<string, unknown>)["role"] as string ?? "",
       tenantId: (raw as Record<string, unknown>)["tenantId"] as string ?? "",
+      purpose: ((raw as Record<string, unknown>)["purpose"] as WsTokenPurpose) ?? "control",
       iat: raw.iat ?? 0,
       exp: raw.exp ?? 0,
     };

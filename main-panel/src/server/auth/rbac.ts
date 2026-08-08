@@ -22,6 +22,7 @@ export type Permission =
   | "material:download"
   | "material:upload"
   | "material:delete"
+  | "material:review"
   // Events
   | "event:view"
   | "event:create"
@@ -59,6 +60,7 @@ const ROLE_PERMISSIONS: Record<AppRole, ReadonlySet<Permission>> = {
     "material:download",
     "material:upload",
     "material:delete",
+    "material:review",
     // Events
     "event:view",
     "event:create",
@@ -85,6 +87,7 @@ const ROLE_PERMISSIONS: Record<AppRole, ReadonlySet<Permission>> = {
     "material:download",
     "material:upload",
     "material:delete",
+    "material:review",
     // Events
     "event:view",
     "event:create",
@@ -109,7 +112,8 @@ const ROLE_PERMISSIONS: Record<AppRole, ReadonlySet<Permission>> = {
     // Materials — view and download only, no upload
     "material:view",
     "material:download",
-    // Rooms and Presenters — read-only
+    // Events, Rooms and Presenters — read-only (needed to pick what to operate on)
+    "event:view",
     "room:view",
     "presenter:view",
     // Live control

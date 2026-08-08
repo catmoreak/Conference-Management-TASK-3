@@ -11,8 +11,7 @@ import {
   isS3Configured,
   uploadObjectToS3,
 } from "~/server/storage/s3-client";
-
-const MAX_UPLOAD_BYTES = 200 * 1024 * 1024; // 200MB
+import { MAX_UPLOAD_BYTES, detectFileKind, isExtensionConsistent } from "~/server/storage/file-validation";
 
 function getOriginFromUrl(urlValue: string | null | undefined): string | null {
   if (!urlValue) {
@@ -167,6 +166,25 @@ export async function POST(request: Request) {
     const objectKey = `${tenantId}/original/${fileId}/${randomId}-${sanitizeFileName(file.name)}`;
 
     const fileBuffer = Buffer.from(await file.arrayBuffer());
+
+    // Cheap magic-number spoofing check: only enforced for filenames that
+    // claim to be one of the recognized presentation/PDF formats -- this
+    // route also serves generic material uploads, so unrecognized
+    // extensions are left untouched rather than blocked outright.
+    const claimedExt = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+    if ([".pptx", ".pptm", ".ppt", ".pdf"].includes(claimedExt)) {
+      const kind = detectFileKind(fileBuffer);
+      if (kind === "unknown" || !isExtensionConsistent(file.name, kind)) {
+        return withCorsHeaders(
+          NextResponse.json(
+            { error: "File content does not match its extension" },
+            { status: 400 },
+          ),
+          request,
+        );
+      }
+    }
+
     const uploaded = await uploadObjectToS3({
       objectKey,
       body: fileBuffer,

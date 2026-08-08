@@ -37,7 +37,7 @@ export const env = createEnv({
    * `NEXT_PUBLIC_`.
    */
   client: {
-    // NEXT_PUBLIC_CLIENTVAR: z.string(),
+    NEXT_PUBLIC_WS_URL: z.string().optional(),
   },
 
   /**
@@ -59,6 +59,7 @@ export const env = createEnv({
     S3_PUBLIC_BASE_URL: process.env.S3_PUBLIC_BASE_URL,
     S3_ALLOW_ANONYMOUS_PUT: process.env.S3_ALLOW_ANONYMOUS_PUT,
     NODE_ENV: process.env.NODE_ENV,
+    NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

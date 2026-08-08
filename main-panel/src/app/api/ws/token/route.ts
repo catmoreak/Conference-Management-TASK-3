@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { z } from "zod";
 
+import { env } from "~/env";
 import { getSession } from "~/server/better-auth/server";
 import { writeAuditLog, extractIp, extractUserAgent } from "~/server/auth/audit";
 import { validateCsrf } from "~/server/auth/csrf";
@@ -14,10 +15,70 @@ import { PrismaAuthzStore } from "~/server/auth/authz/prisma-store";
 
 const authzStore = new PrismaAuthzStore();
 
+// ── Cross-origin support ─────────────────────────────────────────────────
+// podium (a separate app/origin) needs to call this route directly to mint
+// a "display" token -- same allowlist pattern already used by
+// /api/uploads for the same reason.
+
+function getOriginFromUrl(urlValue: string | null | undefined): string | null {
+  if (!urlValue) return null;
+  try {
+    return new URL(urlValue).origin;
+  } catch {
+    return null;
+  }
+}
+
+const allowedOrigins = new Set(
+  [
+    env.PODIUM_APP_URL,
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    env.BETTER_AUTH_URL,
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+  ]
+    .map(getOriginFromUrl)
+    .filter((origin): origin is string => origin !== null),
+);
+
+function withCorsHeaders(response: NextResponse, request: Request): NextResponse {
+  const origin = request.headers.get("origin");
+  if (!origin || !allowedOrigins.has(origin)) {
+    return response;
+  }
+  const headers = new Headers(response.headers);
+  headers.set("Access-Control-Allow-Origin", origin);
+  headers.set("Access-Control-Allow-Credentials", "true");
+  headers.set("Vary", "Origin");
+  return new NextResponse(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+export async function OPTIONS(request: Request): Promise<Response> {
+  const origin = request.headers.get("origin");
+  const headers = new Headers();
+  headers.set("Vary", "Origin, Access-Control-Request-Headers");
+  headers.set("Access-Control-Allow-Methods", "POST,OPTIONS");
+  headers.set(
+    "Access-Control-Allow-Headers",
+    request.headers.get("access-control-request-headers") ?? "content-type",
+  );
+  headers.set("Access-Control-Allow-Credentials", "true");
+  if (origin && allowedOrigins.has(origin)) {
+    headers.set("Access-Control-Allow-Origin", origin);
+  }
+  return new Response(null, { status: 204, headers });
+}
+
 // ── Input validation ─────────────────────────────────────────────────────
 
 const mintTokenSchema = z.object({
   liveSessionId: z.string().uuid("liveSessionId must be a valid UUID"),
+  purpose: z.enum(["control", "display"]).default("control"),
 });
 
 // ── Default TTL ──────────────────────────────────────────────────────────
@@ -51,15 +112,29 @@ const DEFAULT_WS_TOKEN_TTL = 120;
  */
 export async function POST(request: Request) {
   try {
-    // ── CSRF ─────────────────────────────────────────────────────────
-    validateCsrf(request);
+    // ── CSRF / cross-origin ─────────────────────────────────────────
+    // Same-origin calls (the pres-ops dashboard itself) keep the strict
+    // origin===request-URL-origin check. podium calls this cross-origin
+    // to mint a "display" token, so an explicit allowlist substitutes for
+    // that check when the Origin header names a known trusted app --
+    // exactly the same posture /api/uploads already uses.
+    const requestOrigin = request.headers.get("origin");
+    if (requestOrigin && !allowedOrigins.has(requestOrigin)) {
+      return withCorsHeaders(
+        NextResponse.json({ error: "Forbidden origin" }, { status: 403 }),
+        request,
+      );
+    }
+    if (!requestOrigin || getOriginFromUrl(env.BETTER_AUTH_URL) === requestOrigin) {
+      validateCsrf(request);
+    }
 
     // ── Authentication ───────────────────────────────────────────────
     const session = await getSession();
     if (!session?.user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 },
+      return withCorsHeaders(
+        NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+        request,
       );
     }
 
@@ -95,12 +170,15 @@ export async function POST(request: Request) {
     const body: unknown = await request.json();
     const parsed = mintTokenSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: "Validation failed", details: parsed.error.flatten() },
-        { status: 400 },
+      return withCorsHeaders(
+        NextResponse.json(
+          { error: "Validation failed", details: parsed.error.flatten() },
+          { status: 400 },
+        ),
+        request,
       );
     }
-    const { liveSessionId } = parsed.data;
+    const { liveSessionId, purpose } = parsed.data;
 
     // ── Tenant scope ─────────────────────────────────────────────────
     // NOTE: When a LiveSession model is added, look up the session's
@@ -114,6 +192,7 @@ export async function POST(request: Request) {
       liveSessionId,
       role: role ?? "",
       tenantId,
+      purpose,
       ttlSeconds: DEFAULT_WS_TOKEN_TTL,
     });
 
@@ -127,28 +206,31 @@ export async function POST(request: Request) {
       ip: extractIp(reqHeaders),
       user_agent: extractUserAgent(reqHeaders),
       result: "success",
-      metadata: { role: role ?? "none", tenantId },
+      metadata: { role: role ?? "none", tenantId, purpose },
     });
 
-    return NextResponse.json({
-      token,
-      expiresIn: DEFAULT_WS_TOKEN_TTL,
-    });
+    return withCorsHeaders(
+      NextResponse.json({
+        token,
+        expiresIn: DEFAULT_WS_TOKEN_TTL,
+      }),
+      request,
+    );
   } catch (error: unknown) {
     const err = error as { status?: number; error?: string; message?: string; code?: string };
 
     // Known auth/RBAC/onboarding errors throw with a status
     if (err.status) {
-      return NextResponse.json(
-        { error: err.error ?? err.message },
-        { status: err.status },
+      return withCorsHeaders(
+        NextResponse.json({ error: err.error ?? err.message }, { status: err.status }),
+        request,
       );
     }
 
     console.error("[ws/token] Error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
+    return withCorsHeaders(
+      NextResponse.json({ error: "Internal server error" }, { status: 500 }),
+      request,
     );
   }
 }

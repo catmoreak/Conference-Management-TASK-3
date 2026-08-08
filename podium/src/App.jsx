@@ -1,7 +1,12 @@
-import React, { useEffect, useState } from "react";
-import { CheckCircle2, AlertTriangle, XCircle, LogIn, Power, ShieldCheck, Upload } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { CheckCircle2, AlertTriangle, XCircle, LogIn, Power, ShieldCheck, Upload, Cast } from "lucide-react";
 
 import { authClient, getAuthErrorMessage, getDisplayRole, mainPanelAuthUrl } from "./lib/auth";
+import { translations, LANG_STORAGE_KEY } from "./lib/i18n";
+import { WebSocketClient } from "./websocket/WebSocketClient";
+import { IpcPresentationController } from "./presentation/IpcPresentationController";
+
+const wsUrl = (import.meta.env.VITE_WS_URL ?? "ws://localhost:4001").replace(/\/+$/, "");
 
 function AuthField({ label, id, type, value, onChange, placeholder, autoComplete, disabled }) {
   return (
@@ -30,13 +35,27 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
-  const [status, setStatus] = useState("Sign in");
+  const [statusKey, setStatusKey] = useState("signIn");
   const [notification, setNotification] = useState(null);
+  const [lang, setLang] = useState(() => localStorage.getItem(LANG_STORAGE_KEY) || "en");
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploadedItems, setUploadedItems] = useState([]);
   const [openingFile, setOpeningFile] = useState(false);
 
+  const [events, setEvents] = useState([]);
+  const [liveSessions, setLiveSessions] = useState([]);
+  const [displayEventId, setDisplayEventId] = useState("");
+  const [displaySessionId, setDisplaySessionId] = useState("");
+  const [displayState, setDisplayState] = useState("disconnected");
+  const wsClientRef = useRef(null);
+
   const user = session.data?.user ?? null;
+  const t = translations[lang];
+  const statusText = (key) => (key === "signIn" ? t.signIn : key === "twoFactorRequired" ? t.twoFactorRequired : "");
+
+  useEffect(() => {
+    localStorage.setItem(LANG_STORAGE_KEY, lang);
+  }, [lang]);
 
   const setNotificationMessage = (type, message) => {
     setNotification({ type, message });
@@ -62,13 +81,13 @@ export default function App() {
     }
 
     if (user) {
-      setStatus("");
+      setStatusKey("");
       setIsMfaStep(false);
       setError("");
       return;
     }
 
-    setStatus("Sign in");
+    setStatusKey("signIn");
   }, [session.isPending, user]);
 
   const handleSignIn = async (event) => {
@@ -84,7 +103,7 @@ export default function App() {
       });
 
       if (result.error) {
-        const message = getAuthErrorMessage(result.error, "Invalid credentials.");
+        const message = getAuthErrorMessage(result.error, t.notif.invalidCredentials);
         setError(message);
         setNotificationMessage("error", message);
         return;
@@ -92,15 +111,15 @@ export default function App() {
 
       if (result.data && (result.data.twoFactorRedirect || result.data.twoFactorMethods?.length)) {
         setIsMfaStep(true);
-        setStatus("Two-factor required");
-        setNotificationMessage("warning", "Enter your verification code.");
+        setStatusKey("twoFactorRequired");
+        setNotificationMessage("warning", t.notif.enterVerificationCode);
         return;
       }
 
       await session.refetch();
-      setNotificationMessage("success", "Signed in.");
+      setNotificationMessage("success", t.notif.signedIn);
     } catch (signInError) {
-      const message = getAuthErrorMessage(signInError, "Unable to sign in.");
+      const message = getAuthErrorMessage(signInError, t.notif.unableToSignIn);
       setError(message);
       setNotificationMessage("error", message);
     } finally {
@@ -119,7 +138,7 @@ export default function App() {
       });
 
       if (result.error) {
-        const message = getAuthErrorMessage(result.error, "Verification failed.");
+        const message = getAuthErrorMessage(result.error, t.notif.verificationFailed);
         setError(message);
         setNotificationMessage("error", message);
         return;
@@ -128,9 +147,9 @@ export default function App() {
       setMfaCode("");
       setIsMfaStep(false);
       await session.refetch();
-      setNotificationMessage("success", "Verification complete.");
+      setNotificationMessage("success", t.notif.verificationComplete);
     } catch (verifyError) {
-      const message = getAuthErrorMessage(verifyError, "Verification failed.");
+      const message = getAuthErrorMessage(verifyError, t.notif.verificationFailed);
       setError(message);
       setNotificationMessage("error", message);
     } finally {
@@ -145,9 +164,9 @@ export default function App() {
     try {
       await authClient.signOut();
       await session.refetch();
-      setNotificationMessage("success", "Signed out.");
+      setNotificationMessage("success", t.notif.signedOut);
     } catch (signOutError) {
-      const message = getAuthErrorMessage(signOutError, "Unable to sign out.");
+      const message = getAuthErrorMessage(signOutError, t.notif.unableToSignOut);
       setError(message);
       setNotificationMessage("error", message);
     } finally {
@@ -194,19 +213,19 @@ export default function App() {
     if (!isElectron) {
       // Fallback: try ms-powerpoint URI scheme (works if PowerPoint is installed)
       window.location.href = `ms-powerpoint:ofe|u|${item.publicUrl}`;
-      setNotificationMessage("warning", "Trying to open in PowerPoint via protocol link…");
+      setNotificationMessage("warning", t.notif.tryingProtocolLink);
       return;
     }
     setOpeningFile(true);
     try {
       const result = await window.electronAPI.openFileForPresentation(item.publicUrl, item.name);
       if (!result || !result.success) {
-        setNotificationMessage("error", result?.error || "Could not open file.");
+        setNotificationMessage("error", result?.error || t.notif.couldNotOpenFile);
       } else {
-        setNotificationMessage("success", `Opening ${item.name} in PowerPoint…`);
+        setNotificationMessage("success", t.notif.openingInPowerPoint(item.name));
       }
     } catch (err) {
-      setNotificationMessage("error", `Failed: ${err?.message ?? "unknown error"}`);
+      setNotificationMessage("error", `${t.notif.failedPrefix}${err?.message ?? t.notif.unknownError}`);
     } finally {
       setOpeningFile(false);
     }
@@ -221,16 +240,82 @@ export default function App() {
     try {
       const result = await window.electronAPI.openPresentationWindow(item.publicUrl, item.name);
       if (!result || !result.success) {
-        setNotificationMessage("error", "Could not open presentation window.");
+        setNotificationMessage("error", t.notif.couldNotOpenWindow);
       }
     } catch (err) {
-      setNotificationMessage("error", `Failed: ${err?.message ?? "unknown error"}`);
+      setNotificationMessage("error", `${t.notif.failedPrefix}${err?.message ?? t.notif.unknownError}`);
     }
+  };
+
+  useEffect(() => {
+    if (!user) return;
+    fetch(`${mainPanelAuthUrl}/api/checkin`)
+      .then((r) => r.json())
+      .then((data) => setEvents(data.events ?? []))
+      .catch(() => setEvents([]));
+  }, [user]);
+
+  useEffect(() => {
+    if (!displayEventId) {
+      setLiveSessions([]);
+      return;
+    }
+    fetch(`${mainPanelAuthUrl}/api/live-sessions?eventId=${displayEventId}`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((data) => setLiveSessions(data.liveSessions ?? []))
+      .catch(() => setLiveSessions([]));
+  }, [displayEventId]);
+
+  useEffect(() => {
+    return () => {
+      wsClientRef.current?.disconnect();
+    };
+  }, []);
+
+  const handleConnectDisplay = async () => {
+    if (!displaySessionId || !user) return;
+    setDisplayState("connecting");
+
+    try {
+      const res = await fetch(`${mainPanelAuthUrl}/api/ws/token`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ liveSessionId: displaySessionId, purpose: "display" }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.token) {
+        setDisplayState("error");
+        setNotificationMessage("error", data.error || t.notif.failedToGetDisplayToken);
+        return;
+      }
+
+      const controller = new IpcPresentationController(displaySessionId);
+      const client = new WebSocketClient(
+        `${wsUrl}?liveSessionId=${displaySessionId}`,
+        user.id,
+        data.token,
+        controller,
+      );
+      wsClientRef.current = client;
+      client.connect();
+      setDisplayState("connected");
+      setNotificationMessage("success", t.notif.connectedAsDisplay);
+    } catch (err) {
+      setDisplayState("error");
+      setNotificationMessage("error", getAuthErrorMessage(err, t.notif.failedToConnect));
+    }
+  };
+
+  const handleDisconnectDisplay = () => {
+    wsClientRef.current?.disconnect();
+    wsClientRef.current = null;
+    setDisplayState("disconnected");
   };
 
   const handleUploadMaterials = async () => {
     if (selectedFiles.length === 0) {
-      setNotificationMessage("warning", "Select files first.");
+      setNotificationMessage("warning", t.notif.selectFilesFirst);
       return;
     }
 
@@ -255,7 +340,7 @@ export default function App() {
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
           failedCount += 1;
-          setError(payload.error || `Upload failed for ${file.name}`);
+          setError(payload.error || t.notif.uploadFailedFor(file.name));
           continue;
         }
 
@@ -268,7 +353,7 @@ export default function App() {
         });
       } catch (uploadError) {
         failedCount += 1;
-        setError(getAuthErrorMessage(uploadError, `Upload failed for ${file.name}`));
+        setError(getAuthErrorMessage(uploadError, t.notif.uploadFailedFor(file.name)));
       }
     }
 
@@ -278,11 +363,11 @@ export default function App() {
     }
 
     if (uploadedCount > 0 && failedCount === 0) {
-      setNotificationMessage("success", `${uploadedCount} file(s) uploaded.`);
+      setNotificationMessage("success", t.notif.filesUploaded(uploadedCount));
     } else if (uploadedCount > 0 && failedCount > 0) {
-      setNotificationMessage("warning", `${uploadedCount} uploaded, ${failedCount} failed.`);
+      setNotificationMessage("warning", t.notif.uploadedAndFailed(uploadedCount, failedCount));
     } else if (failedCount > 0) {
-      setNotificationMessage("error", "Upload failed.");
+      setNotificationMessage("error", t.notif.uploadFailed);
     }
 
     setUploading(false);
@@ -312,26 +397,42 @@ export default function App() {
                   <ShieldCheck size={16} />
                   EventHQ
                 </div>
-                <p className="hero-brand-sub">EVENTHQ PLATFORM</p>
+                <p className="hero-brand-sub">{t.brandSub}</p>
               </div>
               <div className="lang-chip">
-                <span className="active">EN</span>
-                <span>JP</span>
+                <span
+                  className={lang === "en" ? "active" : ""}
+                  role="button"
+                  tabIndex={0}
+                  style={{ cursor: "pointer" }}
+                  onClick={() => setLang("en")}
+                >
+                  EN
+                </span>
+                <span
+                  className={lang === "ja" ? "active" : ""}
+                  role="button"
+                  tabIndex={0}
+                  style={{ cursor: "pointer" }}
+                  onClick={() => setLang("ja")}
+                >
+                  JP
+                </span>
               </div>
             </div>
 
-            <h1 className="hero-title">Seamless reception for your events</h1>
+            <h1 className="hero-title">{t.heroTitle}</h1>
             <p className="hero-subtitle">
-            Presentations can be presented
+            {t.heroSubtitle}
             </p>
 
-            <p className="server-note">Server: {mainPanelAuthUrl}</p>
+            <p className="server-note">{t.server}: {mainPanelAuthUrl}</p>
           </section>
 
           <section className="login-panel">
             <div className="podium-auth-header">
-              <h1 className="podium-title">Welcome back</h1>
-              
+              <h1 className="podium-title">{t.welcomeBack}</h1>
+
             </div>
 
             {error ? (
@@ -339,51 +440,51 @@ export default function App() {
                 {error}
               </div>
             ) : (
-              <div className="podium-status-copy">{status}</div>
+              <div className="podium-status-copy">{statusText(statusKey)}</div>
             )}
 
             {!isMfaStep ? (
               <form className="auth-form" onSubmit={handleSignIn}>
                 <AuthField
-                  label="Email"
+                  label={t.email}
                   id="email"
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="staff@conference.local"
+                  placeholder={t.emailPlaceholder}
                   autoComplete="email"
                   disabled={loading}
                 />
                 <AuthField
-                  label="Password"
+                  label={t.password}
                   id="password"
                   type="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  placeholder="Password"
+                  placeholder={t.passwordPlaceholder}
                   autoComplete="current-password"
                   disabled={loading}
                 />
                 <button className="auth-button" type="submit" disabled={loading}>
                   <LogIn size={16} />
-                  {loading ? "Signing in..." : "Login"}
+                  {loading ? t.signingIn : t.login}
                 </button>
               </form>
             ) : (
               <form className="auth-form" onSubmit={handleVerifyTotp}>
                 <AuthField
-                  label="Verification code"
+                  label={t.verificationCode}
                   id="mfaCode"
                   type="text"
                   value={mfaCode}
                   onChange={(event) => setMfaCode(event.target.value)}
-                  placeholder="000000"
+                  placeholder={t.codePlaceholder}
                   autoComplete="one-time-code"
                   disabled={loading}
                 />
                 <button className="auth-button" type="submit" disabled={loading}>
                   <ShieldCheck size={16} />
-                  {loading ? "Verifying..." : "Verify code"}
+                  {loading ? t.verifying : t.verifyCode}
                 </button>
               </form>
             )}
@@ -408,21 +509,68 @@ export default function App() {
               <ShieldCheck size={16} />
               EventHQ
             </div>
-            <h1 className="dashboard-title"> Dashboard</h1>
+            <h1 className="dashboard-title">{t.dashboard}</h1>
           </div>
           <button className="auth-button secondary" type="button" onClick={handleSignOut} disabled={loading}>
             <Power size={16} />
-            {loading ? "Signing out..." : "Sign out"}
+            {loading ? t.signingOut : t.signOut}
           </button>
         </header>
 
         <main className="dashboard-content">
-        
 
           <section className="upload-panel">
             <div className="upload-header">
-              <h2>Upload materials</h2>
-              <p>Select files from local disk, USB, or external drives.</p>
+              <h2><Cast size={16} style={{ display: "inline", marginRight: 6 }} />{t.connectAsDisplay}</h2>
+              <p>{t.connectAsDisplayDesc}</p>
+            </div>
+
+            <div className="upload-actions" style={{ flexWrap: "wrap" }}>
+              <select
+                value={displayEventId}
+                onChange={(e) => {
+                  setDisplayEventId(e.target.value);
+                  setDisplaySessionId("");
+                }}
+                disabled={displayState === "connected"}
+              >
+                <option value="">{t.selectEvent}</option>
+                {events.map((ev) => (
+                  <option key={ev.id} value={ev.id}>{ev.name}</option>
+                ))}
+              </select>
+              <select
+                value={displaySessionId}
+                onChange={(e) => setDisplaySessionId(e.target.value)}
+                disabled={!displayEventId || displayState === "connected"}
+              >
+                <option value="">{t.selectLiveSession}</option>
+                {liveSessions.map((ls) => (
+                  <option key={ls.id} value={ls.id}>{ls.name}{ls.room ? ` (${ls.room.name})` : ""}</option>
+                ))}
+              </select>
+              {displayState === "connected" ? (
+                <button className="auth-button secondary" type="button" onClick={handleDisconnectDisplay}>
+                  {t.disconnect}
+                </button>
+              ) : (
+                <button
+                  className="auth-button"
+                  type="button"
+                  disabled={!displaySessionId || displayState === "connecting"}
+                  onClick={() => void handleConnectDisplay()}
+                >
+                  {displayState === "connecting" ? t.connecting : t.connect}
+                </button>
+              )}
+              <span className="upload-hint">{t.displayStatus[displayState] ?? displayState}</span>
+            </div>
+          </section>
+
+          <section className="upload-panel">
+            <div className="upload-header">
+              <h2>{t.uploadMaterials}</h2>
+              <p>{t.uploadMaterialsDesc}</p>
             </div>
 
             <label className="file-picker">
@@ -445,10 +593,10 @@ export default function App() {
                 disabled={uploading || selectedFiles.length === 0}
               >
                 <Upload size={16} />
-                {uploading ? "Uploading..." : "Upload to server"}
+                {uploading ? t.uploading : t.uploadToServer}
               </button>
               {selectedFiles.length > 0 ? (
-                <span className="upload-hint">{selectedFiles.length} file(s) selected</span>
+                <span className="upload-hint">{t.filesSelected(selectedFiles.length)}</span>
               ) : null}
             </div>
 
@@ -465,18 +613,18 @@ export default function App() {
                              className="item-action-btn preview-btn"
                              onClick={() => handlePreviewInWindow(item)}
                            >
-                              Present in window
+                              {t.presentInWindow}
                            </button>
                            <button
                              className="item-action-btn open-btn"
                              disabled={openingFile}
                              onClick={() => handleOpenInApp(item)}
                            >
-                             {openingFile ? "Opening…" : "⬆ Open in PowerPoint"}
+                             {openingFile ? t.opening : t.openInPowerPoint}
                            </button>
                          </>
                        ) : item.publicUrl ? (
-                         <a href={item.publicUrl} target="_blank" rel="noreferrer">View</a>
+                         <a href={item.publicUrl} target="_blank" rel="noreferrer">{t.view}</a>
                        ) : null}
                      </span>
                    </span>
@@ -487,7 +635,7 @@ export default function App() {
             ) : null}
           </section>
 
-          <div className="podium-status-copy">{status}</div>
+          <div className="podium-status-copy">{statusText(statusKey)}</div>
           {error ? (
             <div className="podium-alert" role="alert" aria-live="assertive">
               {error}
