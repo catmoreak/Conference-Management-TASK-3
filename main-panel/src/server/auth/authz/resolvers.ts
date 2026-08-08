@@ -1,9 +1,9 @@
 /**
  * Resource resolvers: turn a Prisma record into the AuthzResource shape
  * canUserPerform decides against. tenantId is deliberately never stored
- * directly on LiveSession/Submission -- it's derived here through the Event
- * relation on every call, so it can never drift from its parent event's
- * tenant. Not wired to any route yet.
+ * directly on LiveSession/Submission/Room/Presenter/PresentationAssignment
+ * -- it's derived here through the Event relation on every call, so it
+ * can never drift from its parent event's tenant. Not wired to any route yet.
  */
 
 import { db } from "~/server/db";
@@ -49,5 +49,48 @@ export async function resolveSubmissionResource(submissionId: string): Promise<A
     ownerId: submission.ownerId,
     status: submission.status,
     tenantId: submission.event.tenantId,
+  };
+}
+
+export async function resolveRoomResource(roomId: string): Promise<AuthzResource | null> {
+  const room = await db.room.findUnique({
+    where: { id: roomId },
+    include: { event: true },
+  });
+  if (!room) return null;
+  return {
+    type: "room",
+    id: room.id,
+    eventId: room.eventId,
+    tenantId: room.event.tenantId,
+  };
+}
+
+export async function resolvePresenterResource(presenterId: string): Promise<AuthzResource | null> {
+  const presenter = await db.presenter.findUnique({
+    where: { id: presenterId },
+    include: { event: true },
+  });
+  if (!presenter) return null;
+  return {
+    type: "presenter",
+    id: presenter.id,
+    eventId: presenter.eventId,
+    tenantId: presenter.event.tenantId,
+  };
+}
+
+export async function resolvePresentationAssignmentResource(assignmentId: string): Promise<AuthzResource | null> {
+  const assignment = await db.presentationAssignment.findUnique({
+    where: { id: assignmentId },
+    include: { liveSession: { include: { event: true } } },
+  });
+  if (!assignment) return null;
+  return {
+    type: "assignment",
+    id: assignment.id,
+    eventId: assignment.liveSession.eventId,
+    sessionId: assignment.liveSessionId,
+    tenantId: assignment.liveSession.event.tenantId,
   };
 }

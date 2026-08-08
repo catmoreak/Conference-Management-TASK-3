@@ -37,17 +37,35 @@ export function Navbar() {
               >
                 Active Sessions
               </Link>
+              <Link
+                href="/admin/clients"
+                className={`px-3 py-2 rounded text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-accent-blue ${
+                  isActive("/admin/clients") ? "bg-accent-blue text-white shadow-hard-sm" : "text-text-secondary hover:text-text-primary hover:bg-bg-primary"
+                }`}
+              >
+                Clients
+              </Link>
             </>
           )}
           {(user.role === "admin" || user.role === "staff") && (
-            <Link
-              href="/audit-logs"
-              className={`px-3 py-2 rounded text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-accent-blue ${
-                isActive("/audit-logs") ? "bg-accent-blue text-white shadow-hard-sm" : "text-text-secondary hover:text-text-primary hover:bg-bg-primary"
-              }`}
-            >
-              Audit Logs
-            </Link>
+            <>
+              <Link
+                href="/admin/events"
+                className={`px-3 py-2 rounded text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-accent-blue ${
+                  pathname.startsWith("/admin/events") ? "bg-accent-blue text-white shadow-hard-sm" : "text-text-secondary hover:text-text-primary hover:bg-bg-primary"
+                }`}
+              >
+                Events
+              </Link>
+              <Link
+                href="/audit-logs"
+                className={`px-3 py-2 rounded text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-accent-blue ${
+                  isActive("/audit-logs") ? "bg-accent-blue text-white shadow-hard-sm" : "text-text-secondary hover:text-text-primary hover:bg-bg-primary"
+                }`}
+              >
+                Audit Logs
+              </Link>
+            </>
           )}
           {user.role === "pres_ops_staff" && (
             <span className="text-sm bg-accent-sage/10 text-accent-sage border border-accent-sage/30 px-3 py-1.5 rounded font-medium shadow-hard-sm">

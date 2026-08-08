@@ -27,6 +27,14 @@ export type Permission =
   | "event:create"
   | "event:edit"
   | "event:delete"
+  // Rooms (sub-resource of Event)
+  | "room:view"
+  | "room:manage"
+  // Presenters (sub-resource of Event; no PII per FR-EVT-003)
+  | "presenter:view"
+  | "presenter:manage"
+  // Assignments (presenter ↔ session join)
+  | "assignment:manage"
   // Live control
   | "live-control:operate"
   | "live-control:view"
@@ -56,6 +64,14 @@ const ROLE_PERMISSIONS: Record<AppRole, ReadonlySet<Permission>> = {
     "event:create",
     "event:edit",
     "event:delete",
+    // Rooms
+    "room:view",
+    "room:manage",
+    // Presenters
+    "presenter:view",
+    "presenter:manage",
+    // Assignments
+    "assignment:manage",
     // Live control
     "live-control:operate",
     "live-control:view",
@@ -74,6 +90,14 @@ const ROLE_PERMISSIONS: Record<AppRole, ReadonlySet<Permission>> = {
     "event:create",
     "event:edit",
     "event:delete",
+    // Rooms
+    "room:view",
+    "room:manage",
+    // Presenters
+    "presenter:view",
+    "presenter:manage",
+    // Assignments
+    "assignment:manage",
     // Live control
     "live-control:operate",
     "live-control:view",
@@ -85,6 +109,9 @@ const ROLE_PERMISSIONS: Record<AppRole, ReadonlySet<Permission>> = {
     // Materials — view and download only, no upload
     "material:view",
     "material:download",
+    // Rooms and Presenters — read-only
+    "room:view",
+    "presenter:view",
     // Live control
     "live-control:operate",
     "live-control:view",
