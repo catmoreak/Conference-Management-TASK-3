@@ -11,7 +11,7 @@ import {
   isS3Configured,
   uploadObjectToS3,
 } from "~/server/storage/s3-client";
-import { MAX_UPLOAD_BYTES, detectFileKind, isExtensionConsistent } from "~/server/storage/file-validation";
+import { MAX_UPLOAD_BYTES, detectFileKind, isExtensionConsistent, checkZipBomb } from "~/server/storage/file-validation";
 
 function getOriginFromUrl(urlValue: string | null | undefined): string | null {
   if (!urlValue) {
@@ -182,6 +182,20 @@ export async function POST(request: Request) {
           ),
           request,
         );
+      }
+
+      // ZIP-bomb check for PPTX/PPTM files
+      if (kind === "pptx") {
+        const bombCheck = checkZipBomb(fileBuffer);
+        if (!bombCheck.safe) {
+          return withCorsHeaders(
+            NextResponse.json(
+              { error: `File rejected: ${bombCheck.reason}` },
+              { status: 400 },
+            ),
+            request,
+          );
+        }
       }
     }
 

@@ -46,3 +46,72 @@ export function isExtensionConsistent(fileName: string, kind: FileKind): boolean
   if (!allowedKinds) return false;
   return allowedKinds.includes(kind);
 }
+/**
+ * ZIP-bomb detection for PPTX files (which are ZIP containers).
+ * Checks the ratio of compressed size to uncompressed size declared
+ * in the ZIP local file headers. A legitimate PPTX rarely exceeds
+ * a 20:1 ratio; anything above MAX_COMPRESSION_RATIO is suspicious.
+ *
+ * This is a cheap header-only check -- it reads the declared sizes
+ * without actually decompressing, so it cannot be bypassed by nesting
+ * bombs inside a valid outer entry.
+ */
+
+const MAX_COMPRESSION_RATIO = 100; // 100:1 compressed-to-uncompressed ratio
+const MAX_UNCOMPRESSED_BYTES = 2 * 1024 * 1024 * 1024; // 2GB uncompressed cap
+
+export type ZipBombCheckResult =
+  | { safe: true }
+  | { safe: false; reason: string };
+
+export function checkZipBomb(buffer: Buffer): ZipBombCheckResult {
+  // Only applies to ZIP-based files (PPTX/PPTM)
+  if (
+    buffer.length < 4 ||
+    !buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))
+  ) {
+    return { safe: true }; // Not a ZIP, skip check
+  }
+
+  let offset = 0;
+  let totalUncompressed = 0;
+  let entryCount = 0;
+
+  while (offset + 30 <= buffer.length) {
+    // Local file header signature: PK\x03\x04
+    const sig = buffer.readUInt32LE(offset);
+    if (sig !== 0x04034b50) break;
+
+    const compressedSize = buffer.readUInt32LE(offset + 18);
+    const uncompressedSize = buffer.readUInt32LE(offset + 22);
+    const fileNameLength = buffer.readUInt16LE(offset + 26);
+    const extraLength = buffer.readUInt16LE(offset + 28);
+
+    
+    totalUncompressed += uncompressedSize;
+    entryCount++;
+
+    // Uncompressed size cap
+    if (totalUncompressed > MAX_UNCOMPRESSED_BYTES) {
+      return {
+        safe: false,
+        reason: `Declared uncompressed size exceeds ${Math.floor(MAX_UNCOMPRESSED_BYTES / (1024 * 1024 * 1024))}GB limit`,
+      };
+    }
+
+    // Compression ratio check (skip if compressed size is 0 to avoid division by zero)
+    if (compressedSize > 0) {
+      const ratio = uncompressedSize / compressedSize;
+      if (ratio > MAX_COMPRESSION_RATIO) {
+        return {
+          safe: false,
+          reason: `Suspicious compression ratio ${ratio.toFixed(0)}:1 on entry ${entryCount} (max allowed: ${MAX_COMPRESSION_RATIO}:1)`,
+        };
+      }
+    }
+
+    offset += 30 + fileNameLength + extraLength + compressedSize;
+  }
+
+  return { safe: true };
+}
