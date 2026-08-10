@@ -167,14 +167,17 @@ export async function POST(request: Request) {
 
     const fileBuffer = Buffer.from(await file.arrayBuffer());
 
-    // Cheap magic-number spoofing check: only enforced for filenames that
-    // claim to be one of the recognized presentation/PDF formats -- this
-    // route also serves generic material uploads, so unrecognized
-    // extensions are left untouched rather than blocked outright.
+    // Magic-number spoofing check: only enforced for filenames that claim to
+    // be one of the recognised presentation/PDF formats. We intentionally
+    // allow files whose type we cannot detect (kind === "unknown") -- some
+    // legitimate PPTX files (e.g. encrypted/password-protected files,
+    // certain Google Slides / LibreOffice exports) use non-standard headers
+    // that our sniffer cannot fingerprint. We only hard-block when we
+    // *positively* identify a mismatch (e.g. PDF bytes with a .pptx extension).
     const claimedExt = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
     if ([".pptx", ".pptm", ".ppt", ".pdf"].includes(claimedExt)) {
       const kind = detectFileKind(fileBuffer);
-      if (kind === "unknown" || !isExtensionConsistent(file.name, kind)) {
+      if (kind !== "unknown" && !isExtensionConsistent(file.name, kind)) {
         return withCorsHeaders(
           NextResponse.json(
             { error: "File content does not match its extension" },

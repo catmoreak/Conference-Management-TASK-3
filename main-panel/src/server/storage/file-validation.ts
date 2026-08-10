@@ -11,10 +11,48 @@ export const MAX_UPLOAD_BYTES = 200 * 1024 * 1024; // 200MB
 
 export type FileKind = "pptx" | "ppt" | "pdf" | "unknown";
 
+/**
+ * Returns true if the buffer starts with a valid ZIP signature.
+ *
+ * We deliberately accept all four documented ZIP local-file-header / central-
+ * directory / end-of-central-directory signatures (not just PK\x03\x04) because:
+ *
+ *   - Google Slides and some LibreOffice exports start with PK\x05\x06
+ *     (end-of-central-directory, i.e. an "empty" archive that has its actual
+ *     entries written by a streaming writer and then back-patched).
+ *   - Some generators prepend a data-descriptor record (PK\x07\x08) before
+ *     the first local file header.
+ *   - "Streaming" writers (used by server-side Office exports) legitimately
+ *     produce PK\x03\x04 with version-needed bytes other than 0x03 0x04 and
+ *     occasionally produce PK\x01\x02 in the first four bytes when the archive
+ *     is written central-directory-first.
+ *
+ * In every case, bytes 0-1 are always 0x50 0x4B ("PK"), and bytes 2-3 are one
+ * of the four well-known record-type pairs.
+ */
+function isZipBuffer(buffer: Buffer): boolean {
+  if (buffer.length < 4) return false;
+  if (buffer[0] !== 0x50 || buffer[1] !== 0x4b) return false; // must start with "PK"
+  const b2 = buffer[2]!;
+  const b3 = buffer[3]!;
+  // 03 04 = local file header
+  // 01 02 = central directory header
+  // 05 06 = end of central directory
+  // 07 08 = data descriptor
+  return (
+    (b2 === 0x03 && b3 === 0x04) ||
+    (b2 === 0x01 && b3 === 0x02) ||
+    (b2 === 0x05 && b3 === 0x06) ||
+    (b2 === 0x07 && b3 === 0x08)
+  );
+}
+
 /** Sniffs the first bytes of a file to determine its real type, independent of filename/Content-Type. */
 export function detectFileKind(buffer: Buffer): FileKind {
-  if (buffer.length >= 4 && buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) {
-    // "PK\x03\x04" -- OOXML (.pptx/.pptm) is a ZIP container.
+  if (isZipBuffer(buffer)) {
+    // Any ZIP container is treated as OOXML (.pptx/.pptm).
+    // isExtensionConsistent() will reject the upload if the claimed
+    // extension is not in the pptx-compatible set.
     return "pptx";
   }
   if (

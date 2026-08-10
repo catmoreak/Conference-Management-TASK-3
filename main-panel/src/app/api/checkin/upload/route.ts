@@ -72,7 +72,11 @@ export async function POST(request: Request) {
 
     const fileBuffer = Buffer.from(await file.arrayBuffer());
     const kind = detectFileKind(fileBuffer);
-    if (kind === "unknown" || !isExtensionConsistent(file.name, kind)) {
+    // Only block when we *positively* identify a mismatch (e.g. PDF bytes
+    // claiming a .pptx extension). Files whose type cannot be detected
+    // (kind === "unknown") are allowed through -- encrypted/password-protected
+    // PPTX files and certain cloud-tool exports use non-standard headers.
+    if (kind !== "unknown" && !isExtensionConsistent(file.name, kind)) {
       return NextResponse.json(
         { error: "File content does not match a supported presentation format (.pptx, .ppt, .pdf)" },
         { status: 400 },
