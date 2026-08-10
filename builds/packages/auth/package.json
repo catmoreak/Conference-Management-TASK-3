@@ -1,0 +1,26 @@
+{
+  "name": "@builds/auth",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@builds/db": "*",
+    "@builds/env": "*",
+    "@polar-sh/better-auth": "^1.8.4",
+    "@polar-sh/sdk": "^0.49.0",
+    "better-auth": "1.6.25",
+    "dotenv": "^17.4.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@builds/config": "*",
+    "typescript": "^6.0.3"
+  }
+}

@@ -9,7 +9,7 @@ function getOriginFromUrl(urlValue: string | null | undefined): string | null {
   if (!urlValue) {
     return null;
   }
-
+  //tests
   try {
     return new URL(urlValue).origin;
   } catch {

@@ -1,0 +1,27 @@
+{
+  "name": "@builds/api",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@builds/auth": "*",
+    "@builds/db": "*",
+    "@builds/env": "*",
+    "@trpc/client": "^11.18.0",
+    "@trpc/server": "^11.18.0",
+    "dotenv": "^17.4.2",
+    "next": "^16.3.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@builds/config": "*",
+    "typescript": "^6.0.3"
+  }
+}
