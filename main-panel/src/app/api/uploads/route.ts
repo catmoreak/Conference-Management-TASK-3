@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { env } from "~/env";
 import { getSession } from "~/server/better-auth/server";
 import { writeAuditLog, extractIp, extractUserAgent } from "~/server/auth/audit";
+import { validateCsrf } from "~/server/auth/csrf";
 import { assertPermissions } from "~/server/auth/rbac";
 import { assertOnboardingComplete } from "~/server/auth/mfa-gate";
 import {
@@ -12,62 +13,9 @@ import {
   uploadObjectToS3,
 } from "~/server/storage/s3-client";
 import { MAX_UPLOAD_BYTES, detectFileKind, isExtensionConsistent, checkZipBomb } from "~/server/storage/file-validation";
+import { buildAllowedOrigins, getOriginFromUrl, withCorsHeaders } from "~/server/http/cors";
 
-function getOriginFromUrl(urlValue: string | null | undefined): string | null {
-  if (!urlValue) {
-    return null;
-  }
-  try {
-    return new URL(urlValue).origin;
-  } catch {
-    return null;
-  }
-}
-
-const allowedOrigins = new Set(
-  [
-    env.PODIUM_APP_URL,
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    env.BETTER_AUTH_URL,
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:3001",
-    "http://127.0.0.1:3001",
-  ]
-    .map(getOriginFromUrl)
-    .filter((origin): origin is string => origin !== null),
-);
-
-function appendVaryHeader(headers: Headers, value: string): void {
-  const current = headers.get("Vary");
-  if (!current) {
-    headers.set("Vary", value);
-    return;
-  }
-
-  if (!current.split(",").map((part) => part.trim().toLowerCase()).includes(value.toLowerCase())) {
-    headers.set("Vary", `${current}, ${value}`);
-  }
-}
-
-function withCorsHeaders(response: NextResponse, request: Request): NextResponse {
-  const origin = request.headers.get("origin");
-  if (!origin || !allowedOrigins.has(origin)) {
-    return response;
-  }
-
-  const headers = new Headers(response.headers);
-  headers.set("Access-Control-Allow-Origin", origin);
-  headers.set("Access-Control-Allow-Credentials", "true");
-  appendVaryHeader(headers, "Origin");
-
-  return new NextResponse(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
-}
+const allowedOrigins = buildAllowedOrigins(env.PODIUM_APP_URL, env.BETTER_AUTH_URL);
 
 function sanitizeFileName(fileName: string): string {
   return fileName.replace(/[^\w.\-]/g, "_");
@@ -94,12 +42,20 @@ export async function OPTIONS(request: Request): Promise<Response> {
 
 export async function POST(request: Request) {
   try {
+    // Same posture as /api/ws/token: podium (a separate app/origin) calls
+    // this route cross-origin, so an explicit allowlist substitutes for the
+    // strict same-origin check there. Same-origin calls (the pres-ops
+    // dashboard itself) still go through validateCsrf().
     const origin = request.headers.get("origin");
     if (origin && !allowedOrigins.has(origin)) {
       return withCorsHeaders(
         NextResponse.json({ error: "Forbidden origin" }, { status: 403 }),
         request,
+        allowedOrigins,
       );
+    }
+    if (!origin || getOriginFromUrl(env.BETTER_AUTH_URL) === origin) {
+      validateCsrf(request);
     }
 
     const session = await getSession();
@@ -107,6 +63,7 @@ export async function POST(request: Request) {
       return withCorsHeaders(
         NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
         request,
+        allowedOrigins,
       );
     }
 
@@ -131,6 +88,7 @@ export async function POST(request: Request) {
           { status: 501 },
         ),
         request,
+        allowedOrigins,
       );
     }
 
@@ -140,6 +98,7 @@ export async function POST(request: Request) {
       return withCorsHeaders(
         NextResponse.json({ error: "file is required" }, { status: 400 }),
         request,
+        allowedOrigins,
       );
     }
 
@@ -147,6 +106,7 @@ export async function POST(request: Request) {
       return withCorsHeaders(
         NextResponse.json({ error: "file is empty" }, { status: 400 }),
         request,
+        allowedOrigins,
       );
     }
 
@@ -157,10 +117,11 @@ export async function POST(request: Request) {
           { status: 413 },
         ),
         request,
+        allowedOrigins,
       );
     }
 
-    const tenantId = String(user.tenantId ?? "global");
+    const tenantId = typeof user.tenantId === "string" && user.tenantId ? user.tenantId : "global";
     const fileId = crypto.randomUUID();
     const randomId = crypto.randomUUID();
     const objectKey = `${tenantId}/original/${fileId}/${randomId}-${sanitizeFileName(file.name)}`;
@@ -184,6 +145,7 @@ export async function POST(request: Request) {
             { status: 400 },
           ),
           request,
+          allowedOrigins,
         );
       }
 
@@ -197,6 +159,7 @@ export async function POST(request: Request) {
               { status: 400 },
             ),
             request,
+            allowedOrigins,
           );
         }
       }
@@ -244,6 +207,7 @@ export async function POST(request: Request) {
         { status: 200 },
       ),
       request,
+      allowedOrigins,
     );
   } catch (error: unknown) {
     const err = error as { status?: number; error?: string; message?: string };
@@ -251,6 +215,7 @@ export async function POST(request: Request) {
       return withCorsHeaders(
         NextResponse.json({ error: err.error ?? err.message }, { status: err.status }),
         request,
+        allowedOrigins,
       );
     }
 
@@ -258,6 +223,7 @@ export async function POST(request: Request) {
     return withCorsHeaders(
       NextResponse.json({ error: "Internal server error" }, { status: 500 }),
       request,
+      allowedOrigins,
     );
   }
 }

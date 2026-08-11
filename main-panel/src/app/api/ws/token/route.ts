@@ -3,15 +3,18 @@ import { headers } from "next/headers";
 import { z } from "zod";
 
 import { env } from "~/env";
+import { db } from "~/server/db";
 import { getSession } from "~/server/better-auth/server";
 import { writeAuditLog, extractIp, extractUserAgent } from "~/server/auth/audit";
 import { validateCsrf } from "~/server/auth/csrf";
 import { assertPermissions } from "~/server/auth/rbac";
 import { assertOnboardingComplete } from "~/server/auth/mfa-gate";
+import { assertTenantAccess } from "~/server/auth/tenant";
 import { mintWsToken } from "~/server/auth/ws-token";
 import { shadowCompare } from "~/server/auth/shadow-check";
 import { authorizeAndRun } from "~/server/auth/authz/authorize";
 import { PrismaAuthzStore } from "~/server/auth/authz/prisma-store";
+import { buildAllowedOrigins, getOriginFromUrl, withCorsHeaders } from "~/server/http/cors";
 
 const authzStore = new PrismaAuthzStore();
 
@@ -20,43 +23,7 @@ const authzStore = new PrismaAuthzStore();
 // a "display" token -- same allowlist pattern already used by
 // /api/uploads for the same reason.
 
-function getOriginFromUrl(urlValue: string | null | undefined): string | null {
-  if (!urlValue) return null;
-  try {
-    return new URL(urlValue).origin;
-  } catch {
-    return null;
-  }
-}
-
-const allowedOrigins = new Set(
-  [
-    env.PODIUM_APP_URL,
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    env.BETTER_AUTH_URL,
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-  ]
-    .map(getOriginFromUrl)
-    .filter((origin): origin is string => origin !== null),
-);
-
-function withCorsHeaders(response: NextResponse, request: Request): NextResponse {
-  const origin = request.headers.get("origin");
-  if (!origin || !allowedOrigins.has(origin)) {
-    return response;
-  }
-  const headers = new Headers(response.headers);
-  headers.set("Access-Control-Allow-Origin", origin);
-  headers.set("Access-Control-Allow-Credentials", "true");
-  headers.set("Vary", "Origin");
-  return new NextResponse(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
-}
+const allowedOrigins = buildAllowedOrigins(env.PODIUM_APP_URL, env.BETTER_AUTH_URL);
 
 export async function OPTIONS(request: Request): Promise<Response> {
   const origin = request.headers.get("origin");
@@ -123,6 +90,7 @@ export async function POST(request: Request) {
       return withCorsHeaders(
         NextResponse.json({ error: "Forbidden origin" }, { status: 403 }),
         request,
+        allowedOrigins,
       );
     }
     if (!requestOrigin || getOriginFromUrl(env.BETTER_AUTH_URL) === requestOrigin) {
@@ -135,6 +103,7 @@ export async function POST(request: Request) {
       return withCorsHeaders(
         NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
         request,
+        allowedOrigins,
       );
     }
 
@@ -176,14 +145,31 @@ export async function POST(request: Request) {
           { status: 400 },
         ),
         request,
+        allowedOrigins,
       );
     }
     const { liveSessionId, purpose } = parsed.data;
 
     // ── Tenant scope ─────────────────────────────────────────────────
-    // NOTE: When a LiveSession model is added, look up the session's
-    // tenantId and call assertTenantAccess(session, liveSession.tenantId).
-    // For now, the tenant check is implicit via the user's own tenantId.
+    // live-control:view (checked above) is role-only, not session-scoped,
+    // so without this lookup any such user could mint a token for a
+    // liveSessionId belonging to a different tenant's event. LiveSession
+    // doesn't carry tenantId directly (see schema.prisma) -- it's derived
+    // via event.tenantId, same pattern as /api/live-sessions and the
+    // liveSession/submission routers.
+    const liveSession = await db.liveSession.findUnique({
+      where: { id: liveSessionId },
+      select: { event: { select: { tenantId: true } } },
+    });
+    if (!liveSession) {
+      return withCorsHeaders(
+        NextResponse.json({ error: "Live session not found" }, { status: 404 }),
+        request,
+        allowedOrigins,
+      );
+    }
+    assertTenantAccess(session, liveSession.event.tenantId, true);
+
     const tenantId = (user.tenantId as string) ?? "";
 
     // ── Mint JWT ─────────────────────────────────────────────────────
@@ -215,6 +201,7 @@ export async function POST(request: Request) {
         expiresIn: DEFAULT_WS_TOKEN_TTL,
       }),
       request,
+      allowedOrigins,
     );
   } catch (error: unknown) {
     const err = error as { status?: number; error?: string; message?: string; code?: string };
@@ -224,6 +211,7 @@ export async function POST(request: Request) {
       return withCorsHeaders(
         NextResponse.json({ error: err.error ?? err.message }, { status: err.status }),
         request,
+        allowedOrigins,
       );
     }
 
@@ -231,6 +219,7 @@ export async function POST(request: Request) {
     return withCorsHeaders(
       NextResponse.json({ error: "Internal server error" }, { status: 500 }),
       request,
+      allowedOrigins,
     );
   }
 }

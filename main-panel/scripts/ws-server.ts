@@ -26,12 +26,37 @@
  *      status/error messages from a display are relayed back to control.
  */
 
+import fs from "node:fs";
+import http from "node:http";
+import https from "node:https";
 import { WebSocketServer, WebSocket } from "ws";
 import { validateWsConnect } from "../src/server/auth/ws-connect";
 import { roleHasPermissions } from "../src/server/auth/rbac";
 
 const PORT = Number(process.env.WS_PORT ?? 4001);
 const AUTH_TIMEOUT_MS = 10_000;
+
+// Per-connection message-rate cap. Nothing in the protocol needs anywhere
+// near this many messages/sec (heartbeats are infrequent, commands are
+// operator-paced) -- this is purely to stop a compromised or buggy display/
+// control client from flooding a room once past the auth handshake.
+const MESSAGE_RATE_LIMIT = 20;
+const MESSAGE_RATE_WINDOW_MS = 1000;
+
+// ── Transport: native TLS (wss://) if certs are configured, otherwise
+// plain HTTP (ws://) -- the common alternative in production is a
+// reverse proxy (nginx/ALB) terminating TLS in front of this process,
+// which also works fine with the plain-HTTP mode below.
+const tlsCertPath = process.env.WS_TLS_CERT_PATH;
+const tlsKeyPath = process.env.WS_TLS_KEY_PATH;
+const useTls = Boolean(tlsCertPath && tlsKeyPath);
+
+const httpServer = useTls
+  ? https.createServer({
+      cert: fs.readFileSync(tlsCertPath!),
+      key: fs.readFileSync(tlsKeyPath!),
+    })
+  : http.createServer();
 
 const COMMAND_TYPES = new Set([
   "load_presentation",
@@ -77,7 +102,20 @@ function sendError(ws: WebSocket, code: string, message: string): void {
   send(ws, { type: "error", code, message });
 }
 
-const wss = new WebSocketServer({ port: PORT });
+// Plain HTTP requests (not WS upgrades) hitting this same port/server are
+// treated as a health check -- lets a load balancer or uptime monitor
+// point at this process without a separate port.
+httpServer.on("request", (req, res) => {
+  if (req.url === "/health" || req.url === "/") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: "ok", rooms: rooms.size }));
+    return;
+  }
+  res.writeHead(404);
+  res.end();
+});
+
+const wss = new WebSocketServer({ server: httpServer });
 
 wss.on("connection", (ws: WebSocket, req) => {
   const url = new URL(req.url ?? "", "http://localhost");
@@ -100,7 +138,22 @@ wss.on("connection", (ws: WebSocket, req) => {
     }
   }, AUTH_TIMEOUT_MS);
 
+  let msgWindowStart = Date.now();
+  let msgCount = 0;
+
   ws.on("message", (raw: Buffer) => {
+    const now = Date.now();
+    if (now - msgWindowStart >= MESSAGE_RATE_WINDOW_MS) {
+      msgWindowStart = now;
+      msgCount = 0;
+    }
+    msgCount++;
+    if (msgCount > MESSAGE_RATE_LIMIT) {
+      sendError(ws, "rate_limited", "Too many messages, closing connection");
+      ws.close(1008, "rate_limited");
+      return;
+    }
+
     let msg: Record<string, unknown>;
     try {
       msg = JSON.parse(raw.toString("utf-8")) as Record<string, unknown>;
@@ -192,4 +245,28 @@ wss.on("connection", (ws: WebSocket, req) => {
   });
 });
 
-console.log(`[podium-ws] listening on ws://localhost:${PORT}`);
+httpServer.listen(PORT, () => {
+  console.log(`[podium-ws] listening on ${useTls ? "wss" : "ws"}://0.0.0.0:${PORT} (health check: /health)`);
+});
+
+// ── Graceful shutdown ────────────────────────────────────────────────────
+// Without this, a process-manager restart/redeploy just severs every open
+// socket mid-frame instead of telling clients why -- podium's WebSocketClient
+// already has reconnect-with-backoff, but a clean close code lets it log
+// something more useful than a raw connection drop.
+function shutdown(signal: string) {
+  console.log(`[podium-ws] received ${signal}, shutting down...`);
+  for (const client of wss.clients) {
+    client.close(1001, "server_shutting_down");
+  }
+  wss.close(() => {
+    httpServer.close(() => {
+      process.exit(0);
+    });
+  });
+  // Force-exit if connections don't close cleanly within 5s.
+  setTimeout(() => process.exit(1), 5000).unref();
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

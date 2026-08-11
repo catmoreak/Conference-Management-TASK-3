@@ -14,6 +14,7 @@ export default function PresOpsDashboard() {
   const [submissionId, setSubmissionId] = useState("");
   const [connState, setConnState] = useState<ConnState>("disconnected");
   const [log, setLog] = useState<string[]>([]);
+  const [loadingFile, setLoadingFile] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
 
   const { data: events } = api.event.list.useQuery();
@@ -57,6 +58,11 @@ export default function PresOpsDashboard() {
     socketRef.current = socket;
 
     socket.addEventListener("open", () => {
+      // actorType/serviceId only match the shared PodiumAuthHandshake wire
+      // shape (see scripts/ws-server.ts) so this operator connection looks
+      // identical on the wire to podium's own WebSocketClient -- the server
+      // never trusts these client-asserted fields. Purpose ("control") and
+      // role come solely from the verified JWT minted by /api/ws/token.
       socket.send(
         JSON.stringify({
           type: "auth",
@@ -112,6 +118,28 @@ export default function PresOpsDashboard() {
 
   const selectedSubmission = (submissions ?? []).find((s) => s.id === submissionId);
   const canOperate = connState === "connected";
+
+  async function handleLoad() {
+    if (!selectedSubmission) return;
+    setLoadingFile(true);
+    try {
+      // Fetched fresh right before use -- short-lived presigned URL
+      // (300s TTL), not the submission's old permanent public link.
+      const res = await fetch(`/api/submissions/${selectedSubmission.id}/playback-url`);
+      const data = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
+        appendLog(`Failed to get playback URL: ${data.error ?? res.status}`);
+        return;
+      }
+      sendCommand({
+        type: "load_presentation",
+        presentationId: selectedSubmission.id,
+        fileUrl: data.url,
+      });
+    } finally {
+      setLoadingFile(false);
+    }
+  }
 
   return (
     <div className="flex-1 bg-bg-primary text-text-secondary p-8">
@@ -235,17 +263,11 @@ export default function PresOpsDashboard() {
           <h2 className="text-sm font-semibold text-text-primary uppercase tracking-wider mb-4">Playback Controls</h2>
           <div className="flex flex-wrap gap-2">
             <button
-              disabled={!canOperate || !selectedSubmission}
-              onClick={() =>
-                sendCommand({
-                  type: "load_presentation",
-                  presentationId: selectedSubmission?.id,
-                  fileUrl: selectedSubmission?.publicUrl,
-                })
-              }
+              disabled={!canOperate || !selectedSubmission || loadingFile}
+              onClick={() => void handleLoad()}
               className="px-4 py-2 rounded-lg text-sm font-semibold bg-accent-blue hover:bg-accent-blue/90 text-white transition shadow-hard hover:shadow-hard-hover disabled:opacity-50"
             >
-              Load
+              {loadingFile ? "Loading..." : "Load"}
             </button>
             <button
               disabled={!canOperate}

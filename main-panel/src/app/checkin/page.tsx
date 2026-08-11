@@ -9,6 +9,14 @@ type Event = {
   startDate: string | null;
 };
 
+type SubmissionSummary = {
+  id: string;
+  status: string;
+  fileName: string | null;
+  reviewNote: string | null;
+  createdAt: string;
+};
+
 type Presenter = {
   id: string;
   displayName: string;
@@ -23,6 +31,13 @@ type Presenter = {
       room: { name: string } | null;
     } | null;
   }[];
+  submissions: SubmissionSummary[];
+};
+
+const STATUS_BADGE: Record<string, { label: string; bg: string; fg: string }> = {
+  pending: { label: "Pending review", bg: "#fef3c7", fg: "#92400e" },
+  approved: { label: "Approved", bg: "#dcfce7", fg: "#166534" },
+  rejected: { label: "Needs a new upload", bg: "#fee2e2", fg: "#b91c1c" },
 };
 
 type Step = "select-event" | "select-presenter" | "confirm" | "upload" | "complete";
@@ -173,13 +188,24 @@ export default function CheckinPage() {
             </select>
           </div>
           <div style={{ maxHeight: "60vh", overflowY: "auto" }}>
-            {filteredPresenters.map((p) => (
-              <button key={p.id} onClick={() => { setSelectedPresenter(p); setStep("confirm"); }}
-                style={{ display: "block", width: "100%", padding: "1.25rem", marginBottom: "0.75rem", fontSize: "1.125rem", fontWeight: 600, background: "#fff", border: "2px solid #e2e8f0", borderRadius: "12px", cursor: "pointer", textAlign: "left" }}>
-                {p.displayName}
-                {p.organization && <span style={{ display: "block", fontSize: "1rem", color: "#64748b", fontWeight: 400 }}>{p.organization}</span>}
-              </button>
-            ))}
+            {filteredPresenters.map((p) => {
+              const latest = p.submissions[0];
+              const badge = latest ? STATUS_BADGE[latest.status] : null;
+              return (
+                <button key={p.id} onClick={() => { setSelectedPresenter(p); setStep("confirm"); }}
+                  style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between", gap: "1rem", padding: "1.25rem", marginBottom: "0.75rem", fontSize: "1.125rem", fontWeight: 600, background: "#fff", border: "2px solid #e2e8f0", borderRadius: "12px", cursor: "pointer", textAlign: "left" }}>
+                  <span>
+                    {p.displayName}
+                    {p.organization && <span style={{ display: "block", fontSize: "1rem", color: "#64748b", fontWeight: 400 }}>{p.organization}</span>}
+                  </span>
+                  {badge && (
+                    <span style={{ flexShrink: 0, padding: "0.25rem 0.75rem", fontSize: "0.875rem", fontWeight: 600, borderRadius: "9999px", background: badge.bg, color: badge.fg }}>
+                      {badge.label}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
             {filteredPresenters.length === 0 && <p style={{ textAlign: "center", color: "#64748b", fontSize: "1.125rem" }}>No presenters found. Try a different search.</p>}
           </div>
           <button onClick={() => setStep("select-event")} style={{ marginTop: "1rem", padding: "0.75rem 1.5rem", fontSize: "1.125rem", background: "#f1f5f9", border: "none", borderRadius: "8px", cursor: "pointer" }}>← Back</button>
@@ -199,11 +225,47 @@ export default function CheckinPage() {
               {a.liveSession.startsAt && ` at ${new Date(a.liveSession.startsAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
             </p>
           ))}
+          {(() => {
+            const latest = selectedPresenter.submissions[0];
+            if (!latest) return null;
+            if (latest.status === "approved") {
+              return (
+                <div style={{ marginTop: "1rem", padding: "1rem", background: "#dcfce7", border: "2px solid #86efac", borderRadius: "12px", color: "#166534" }}>
+                  <strong>Your presentation has already been approved.</strong>
+                  <p style={{ marginTop: "0.25rem", fontSize: "1rem" }}>
+                    If you need to make changes, please see conference staff.
+                  </p>
+                </div>
+              );
+            }
+            if (latest.status === "rejected") {
+              return (
+                <div style={{ marginTop: "1rem", padding: "1rem", background: "#fee2e2", border: "2px solid #fca5a5", borderRadius: "12px", color: "#b91c1c" }}>
+                  <strong>Your previous upload needs a correction.</strong>
+                  {latest.reviewNote && <p style={{ marginTop: "0.25rem", fontSize: "1rem" }}>Reason: {latest.reviewNote}</p>}
+                  <p style={{ marginTop: "0.25rem", fontSize: "1rem" }}>Please upload a corrected file below.</p>
+                </div>
+              );
+            }
+            return (
+              <div style={{ marginTop: "1rem", padding: "1rem", background: "#fef3c7", border: "2px solid #fcd34d", borderRadius: "12px", color: "#92400e" }}>
+                You already uploaded <strong>{latest.fileName ?? "a file"}</strong>, still awaiting review.
+                Uploading a new file below will replace it.
+              </div>
+            );
+          })()}
           <div style={{ display: "flex", gap: "1rem", marginTop: "1.5rem" }}>
-            <button onClick={() => setStep("upload")}
-              style={{ flex: 1, padding: "1rem", fontSize: "1.25rem", fontWeight: 700, background: "#2563eb", color: "#fff", border: "none", borderRadius: "12px", cursor: "pointer", minHeight: "64px" }}>
-              ✓ Yes, this is me
-            </button>
+            {selectedPresenter.submissions[0]?.status === "approved" ? (
+              <button onClick={() => setStep("select-presenter")}
+                style={{ flex: 1, padding: "1rem", fontSize: "1.25rem", fontWeight: 700, background: "#f1f5f9", color: "#1e293b", border: "none", borderRadius: "12px", cursor: "pointer", minHeight: "64px" }}>
+                ← Back to search
+              </button>
+            ) : (
+              <button onClick={() => setStep("upload")}
+                style={{ flex: 1, padding: "1rem", fontSize: "1.25rem", fontWeight: 700, background: "#2563eb", color: "#fff", border: "none", borderRadius: "12px", cursor: "pointer", minHeight: "64px" }}>
+                ✓ Yes, this is me
+              </button>
+            )}
             <button onClick={() => setStep("select-presenter")}
               style={{ padding: "1rem 1.5rem", fontSize: "1.125rem", background: "#f1f5f9", border: "none", borderRadius: "12px", cursor: "pointer" }}>
               ← Back
@@ -215,7 +277,9 @@ export default function CheckinPage() {
       {/* Step 4 — Upload */}
       {step === "upload" && (
         <div style={{ width: "100%", maxWidth: "600px", background: "#fff", padding: "2rem", borderRadius: "16px", border: "2px solid #e2e8f0" }}>
-          <h2 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "1rem" }}>Select your presentation file</h2>
+          <h2 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "1rem" }}>
+            {selectedPresenter?.submissions[0]?.status === "rejected" ? "Upload your corrected file" : "Select your presentation file"}
+          </h2>
           <p style={{ fontSize: "1.125rem", color: "#64748b", marginBottom: "1.5rem" }}>Accepted formats: .pptx, .pdf. Maximum size: 200MB.</p>
           <input type="file" accept=".pptx,.pdf,.ppt"
             onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}

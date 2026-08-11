@@ -20,7 +20,8 @@
     "start": "next start",
     "seed:admin": "tsx scripts/seed-admin.ts",
     "typecheck": "tsc --noEmit",
-    "ws:dev": "tsx scripts/ws-server.ts"
+    "ws:dev": "tsx scripts/ws-server.ts",
+    "ws:start": "tsx scripts/ws-server.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.888.0",
@@ -39,6 +40,8 @@
     "react-dom": "^19.0.0",
     "server-only": "^0.0.1",
     "superjson": "^2.2.1",
+    "tsx": "^4.19.2",
+    "ws": "^8.18.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {
@@ -55,10 +58,8 @@
     "prettier-plugin-tailwindcss": "^0.6.11",
     "prisma": "^6.6.0",
     "tailwindcss": "^4.0.15",
-    "tsx": "^4.19.2",
     "typescript": "^5.8.2",
-    "typescript-eslint": "^8.27.0",
-    "ws": "^8.18.0"
+    "typescript-eslint": "^8.27.0"
   },
   "ct3aMetadata": {
     "initVersion": "7.40.0"

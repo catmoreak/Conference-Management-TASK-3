@@ -18,14 +18,32 @@ export const env = createEnv({
     BETTER_AUTH_URL: z.string().url().optional(),
     PODIUM_APP_URL: z.string().url().optional(),
     DATABASE_URL: z.string().url(),
-    S3_ENDPOINT: z.string().url().optional(),
+    // Required in production: without these two, isS3Configured() is false
+    // and every upload/download route silently 501s -- fail at boot, not
+    // on the first real request. Credential vars stay optional below --
+    // there are multiple legitimate ways to supply them (static keys,
+    // S3_ALLOW_ANONYMOUS_PUT, or the AWS SDK's default credential chain
+    // via an IAM role), so requiring one specific mode here would be wrong.
+    S3_ENDPOINT:
+      process.env.NODE_ENV === "production"
+        ? z.string().url()
+        : z.string().url().optional(),
     S3_REGION: z.string().optional(),
-    S3_BUCKET: z.string().optional(),
+    S3_BUCKET:
+      process.env.NODE_ENV === "production"
+        ? z.string().min(1)
+        : z.string().optional(),
     S3_ACCESS_KEY_ID: z.string().optional(),
     S3_SECRET_ACCESS_KEY: z.string().optional(),
     S3_FORCE_PATH_STYLE: z.enum(["true", "false"]).optional(),
     S3_PUBLIC_BASE_URL: z.string().url().optional(),
     S3_ALLOW_ANONYMOUS_PUT: z.enum(["true", "false"]).optional(),
+    // Number of trusted reverse proxies (nginx, ALB, Cloudflare, ...) sitting
+    // in front of this process. X-Forwarded-For is otherwise a plain client-
+    // supplied header that anyone can forge to spoof the audit trail or
+    // bypass the checkin-upload rate limiter, so extractIp() only trusts it
+    // up to this many hops. Set to 0 if the app is ever exposed directly.
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(1),
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
@@ -58,6 +76,7 @@ export const env = createEnv({
     S3_FORCE_PATH_STYLE: process.env.S3_FORCE_PATH_STYLE,
     S3_PUBLIC_BASE_URL: process.env.S3_PUBLIC_BASE_URL,
     S3_ALLOW_ANONYMOUS_PUT: process.env.S3_ALLOW_ANONYMOUS_PUT,
+    TRUST_PROXY_HOPS: process.env.TRUST_PROXY_HOPS,
     NODE_ENV: process.env.NODE_ENV,
     NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL,
   },

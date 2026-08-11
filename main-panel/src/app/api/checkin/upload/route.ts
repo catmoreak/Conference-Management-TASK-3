@@ -3,8 +3,10 @@ import { headers } from "next/headers";
 
 import { db } from "~/server/db";
 import { writeAuditLog, extractIp, extractUserAgent } from "~/server/auth/audit";
-import { getPublicObjectUrl, isS3Configured, uploadObjectToS3 } from "~/server/storage/s3-client";
-import { MAX_UPLOAD_BYTES, detectFileKind, isExtensionConsistent } from "~/server/storage/file-validation";
+import { isS3Configured, uploadObjectToS3 } from "~/server/storage/s3-client";
+import { MAX_UPLOAD_BYTES, detectFileKind, isExtensionConsistent, checkZipBomb } from "~/server/storage/file-validation";
+import { checkRateLimit } from "~/server/http/rate-limit";
+import { canTransition } from "~/server/domain/submission-status";
 
 /**
  * Public check-in upload endpoint — no authentication required.
@@ -15,12 +17,26 @@ import { MAX_UPLOAD_BYTES, detectFileKind, isExtensionConsistent } from "~/serve
  * Auth session, which an anonymous kiosk visitor never has.
  */
 
+// Tighter than the GET route (main-panel/src/app/api/checkin/route.ts) --
+// each request here triggers an S3 write, not just a read.
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+
 function sanitizeFileName(fileName: string): string {
   return fileName.replace(/[^\w.\-]/g, "_");
 }
 
 export async function POST(request: Request) {
   try {
+    const ip = extractIp(request.headers) ?? "unknown";
+    const limit = checkRateLimit(`checkin-upload:${ip}`, RATE_LIMIT_MAX, RATE_LIMIT_WINDOW_MS);
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: "Too many upload attempts. Please wait a moment and try again." },
+        { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
+      );
+    }
+
     if (!isS3Configured()) {
       return NextResponse.json(
         {
@@ -70,6 +86,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "This event is not open for check-in" }, { status: 403 });
     }
 
+    // A presenter re-uploading (e.g. after a rejection) replaces the file
+    // on their existing submission instead of creating an orphaned
+    // duplicate row. "approved" is terminal in the state machine -- pres-ops
+    // may already be relying on that file for a live session, so reopening
+    // it needs staff, not a kiosk re-upload. Fail fast here, before the S3
+    // write, so an already-approved presenter doesn't waste an upload.
+    const existingSubmission = await db.submission.findFirst({
+      where: { presenterId: presenter.id, deletedAt: null },
+      orderBy: { createdAt: "desc" },
+    });
+    if (existingSubmission?.status === "approved") {
+      return NextResponse.json(
+        {
+          error:
+            "This submission has already been approved. Please contact conference staff if you need to make changes.",
+        },
+        { status: 409 },
+      );
+    }
+
     const fileBuffer = Buffer.from(await file.arrayBuffer());
     const kind = detectFileKind(fileBuffer);
     // Only block when we *positively* identify a mismatch (e.g. PDF bytes
@@ -81,6 +117,19 @@ export async function POST(request: Request) {
         { error: "File content does not match a supported presentation format (.pptx, .ppt, .pdf)" },
         { status: 400 },
       );
+    }
+
+    // ZIP-bomb check for PPTX/PPTM files -- this is the anonymous kiosk
+    // route, the most exposed upload surface, so it gets the same
+    // protection as the authenticated /api/uploads route.
+    if (kind === "pptx") {
+      const bombCheck = checkZipBomb(fileBuffer);
+      if (!bombCheck.safe) {
+        return NextResponse.json(
+          { error: `File rejected: ${bombCheck.reason}` },
+          { status: 400 },
+        );
+      }
     }
 
     const tenantId = presenter.event.tenantId;
@@ -98,24 +147,51 @@ export async function POST(request: Request) {
       },
     });
 
-    const publicUrl = getPublicObjectUrl(uploaded.objectKey);
+    // No permanent public URL is stored here (SEC-002) -- reviewers and
+    // operators fetch a short-lived presigned URL on demand instead, via
+    // /api/downloads (staff dashboard "View") and
+    // /api/submissions/[id]/playback-url (pres-ops "Load").
+    const liveSessionId = presenter.presentationAssignments[0]?.liveSessionId ?? null;
+    const fileFields = {
+      liveSessionId,
+      objectKey: uploaded.objectKey,
+      fileName: file.name,
+      fileSize: file.size,
+      contentType: file.type || "application/octet-stream",
+    };
 
-    const submission = await db.submission.create({
-      data: {
-        id: crypto.randomUUID(),
-        eventId: presenter.eventId,
-        liveSessionId: presenter.presentationAssignments[0]?.liveSessionId ?? null,
-        presenterId: presenter.id,
-        ownerId: presenter.id,
-        createdBy: "checkin-kiosk",
-        status: "pending",
-        objectKey: uploaded.objectKey,
-        fileName: file.name,
-        fileSize: file.size,
-        contentType: file.type || "application/octet-stream",
-        publicUrl,
-      },
-    });
+    let submission;
+    if (existingSubmission && existingSubmission.status !== "approved") {
+      // "pending" (replacing a not-yet-reviewed file) stays pending;
+      // "rejected" (resubmission after feedback) moves back to pending --
+      // both are legal per the state machine. Kept as a live assertion
+      // (not just the earlier `?.status === "approved"` check) so this
+      // still fails loudly if a future status value slips through.
+      const transition = canTransition(existingSubmission.status, "pending");
+      if (existingSubmission.status !== "pending" && !transition.ok) {
+        return NextResponse.json({ error: transition.reason }, { status: 409 });
+      }
+      submission = await db.submission.update({
+        where: { id: existingSubmission.id },
+        data: {
+          ...fileFields,
+          status: "pending",
+          revisionCount: { increment: 1 },
+        },
+      });
+    } else {
+      submission = await db.submission.create({
+        data: {
+          id: crypto.randomUUID(),
+          eventId: presenter.eventId,
+          presenterId: presenter.id,
+          ownerId: presenter.id,
+          createdBy: "checkin-kiosk",
+          status: "pending",
+          ...fileFields,
+        },
+      });
+    }
 
     const reqHeaders = await headers();
     await writeAuditLog({

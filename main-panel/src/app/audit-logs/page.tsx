@@ -14,6 +14,7 @@ interface AuditLog {
   user_agent: string | null;
   occurred_at: string;
   result: string;
+  metadata: Record<string, unknown> | null;
 }
 
 export default function AuditLogsPage() {
@@ -192,12 +193,13 @@ export default function AuditLogsPage() {
                   <th className="px-6 py-4">Target (Type / ID)</th>
                   <th className="px-6 py-4">IP / User Agent</th>
                   <th className="px-6 py-4">Result</th>
+                  <th className="px-6 py-4">Metadata</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-soft text-xs">
                 {logs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-text-muted text-sm bg-white">
+                    <td colSpan={7} className="px-6 py-12 text-center text-text-muted text-sm bg-white">
                       No security audit events match the current filter criteria.
                     </td>
                   </tr>
@@ -239,6 +241,18 @@ export default function AuditLogsPage() {
                         >
                           {log.result}
                         </span>
+                      </td>
+                      <td className="px-6 py-4 max-w-xs">
+                        {log.metadata ? (
+                          <pre
+                            className="font-mono text-[10px] text-text-secondary truncate"
+                            title={JSON.stringify(log.metadata, null, 2)}
+                          >
+                            {JSON.stringify(log.metadata)}
+                          </pre>
+                        ) : (
+                          <span className="text-text-muted">—</span>
+                        )}
                       </td>
                     </tr>
                   ))

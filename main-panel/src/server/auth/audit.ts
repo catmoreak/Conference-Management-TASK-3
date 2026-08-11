@@ -1,3 +1,6 @@
+import type { Prisma } from "../../../generated/prisma";
+
+import { env } from "~/env";
 import { db } from "~/server/db";
 
 /**
@@ -56,12 +59,7 @@ export async function writeAuditLog(params: AuditLogParams): Promise<void> {
         ip: params.ip ?? null,
         user_agent: params.user_agent ?? null,
         result: params.result,
-        // Store sanitized metadata in the result field if we have extra info
-        ...(sanitizedMeta
-          ? {
-              result: `${params.result} | ${JSON.stringify(sanitizedMeta)}`,
-            }
-          : {}),
+        metadata: (sanitizedMeta as Prisma.InputJsonValue) ?? undefined,
       },
     });
   } catch (error) {
@@ -72,13 +70,30 @@ export async function writeAuditLog(params: AuditLogParams): Promise<void> {
 
 /**
  * Extract IP address from request headers.
- * Checks x-forwarded-for first (for proxied environments), falls back to
- * x-real-ip, then returns null.
+ *
+ * X-Forwarded-For is a plain client-supplied header -- trusting its
+ * leftmost (client-claimed) entry outright lets any caller forge it, which
+ * both poisons the audit trail and lets the checkin-upload rate limiter be
+ * bypassed by rotating a fake IP per request. With TRUST_PROXY_HOPS trusted
+ * reverse proxies in front of us, each proxy appends the address it
+ * actually observed as the next entry, so the only trustworthy value is
+ * the one written by the proxy nearest to us -- the hops-th entry from the
+ * right, never the client-supplied left end. TRUST_PROXY_HOPS=0 (a direct-
+ * exposure deployment) disables X-Forwarded-For trust entirely.
  */
 export function extractIp(headers: Headers): string | null {
+  const hops = env.TRUST_PROXY_HOPS;
+  if (hops <= 0) return null;
+
   const forwarded = headers.get("x-forwarded-for");
   if (forwarded) {
-    return forwarded.split(",")[0]?.trim() ?? null;
+    const chain = forwarded
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (chain.length === 0) return null;
+    const index = Math.max(0, chain.length - hops);
+    return chain[index] ?? null;
   }
   return headers.get("x-real-ip") ?? null;
 }

@@ -97,21 +97,36 @@ export function isExtensionConsistent(fileName: string, kind: FileKind): boolean
 
 const MAX_COMPRESSION_RATIO = 100; // 100:1 compressed-to-uncompressed ratio
 const MAX_UNCOMPRESSED_BYTES = 2 * 1024 * 1024 * 1024; // 2GB uncompressed cap
+// A legitimate PPTX rarely has more than a few hundred parts. Without a cap,
+// a file engineered with thousands of tiny fabricated local-file headers
+// (each individually under the ratio/size caps above) can still cost real
+// CPU per upload -- on the anonymous, no-login checkin-upload endpoint.
+const MAX_ZIP_ENTRIES = 50_000;
 
 export type ZipBombCheckResult =
   | { safe: true }
   | { safe: false; reason: string };
 
+const LOCAL_FILE_HEADER_SIG = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
+
 export function checkZipBomb(buffer: Buffer): ZipBombCheckResult {
-  // Only applies to ZIP-based files (PPTX/PPTM)
-  if (
-    buffer.length < 4 ||
-    !buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))
-  ) {
+  if (!isZipBuffer(buffer)) {
     return { safe: true }; // Not a ZIP, skip check
   }
 
-  let offset = 0;
+  // isZipBuffer() (and detectFileKind(), which callers gate this function
+  // on) accept all four ZIP signature variants, but local file headers --
+  // the only records that carry the compressed/uncompressed sizes this
+  // check inspects -- aren't always at offset 0 (e.g. central-directory-
+  // first or EOCD-first archives from streaming writers). Find the first
+  // one wherever it is rather than assuming the buffer starts with it.
+  let offset = buffer.indexOf(LOCAL_FILE_HEADER_SIG);
+  if (offset === -1) {
+    // No local file header anywhere -- nothing to inspect (e.g. a bare
+    // EOCD record with entries written elsewhere/later).
+    return { safe: true };
+  }
+
   let totalUncompressed = 0;
   let entryCount = 0;
 
@@ -128,6 +143,13 @@ export function checkZipBomb(buffer: Buffer): ZipBombCheckResult {
     
     totalUncompressed += uncompressedSize;
     entryCount++;
+
+    if (entryCount > MAX_ZIP_ENTRIES) {
+      return {
+        safe: false,
+        reason: `Too many ZIP entries (max ${MAX_ZIP_ENTRIES})`,
+      };
+    }
 
     // Uncompressed size cap
     if (totalUncompressed > MAX_UNCOMPRESSED_BYTES) {

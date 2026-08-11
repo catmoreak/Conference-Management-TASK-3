@@ -7,9 +7,21 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, createPermissionProcedure } from "~/server/api/trpc";
 import { assertTenantAccess } from "~/server/auth/tenant";
 import { writeAuditLog } from "~/server/auth/audit";
+import { canTransition } from "~/server/domain/submission-status";
 
 const viewProcedure = createPermissionProcedure("material:view");
 const reviewProcedure = createPermissionProcedure("material:review");
+
+// Every item must be explicitly confirmed (z.literal(true)) -- this is a
+// server-side re-check of the same gate the staff dashboard UI enforces,
+// not just cosmetic. See REVIEW_CHECKLIST_ITEMS in
+// ~/server/domain/submission-status for the canonical item list.
+const reviewChecklistSchema = z.object({
+  opensCorrectly: z.literal(true),
+  contentMatchesSession: z.literal(true),
+  noProhibitedContent: z.literal(true),
+  formatSupported: z.literal(true),
+});
 
 async function loadSubmissionWithTenantCheck(
   db: Parameters<Parameters<typeof viewProcedure["query"]>[0]>[0]["ctx"]["db"],
@@ -63,12 +75,21 @@ export const submissionRouter = createTRPCRouter({
     }),
 
   approve: reviewProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string().uuid(), checklist: reviewChecklistSchema }))
     .mutation(async ({ ctx, input }) => {
-      await loadSubmissionWithTenantCheck(ctx.db, ctx.session, input.id);
+      const submission = await loadSubmissionWithTenantCheck(ctx.db, ctx.session, input.id);
+      const transition = canTransition(submission.status, "approved");
+      if (!transition.ok) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: transition.reason });
+      }
       const updated = await ctx.db.submission.update({
         where: { id: input.id },
-        data: { status: "approved" },
+        data: {
+          status: "approved",
+          reviewedAt: new Date(),
+          reviewedBy: ctx.session.user.id,
+          reviewChecklist: input.checklist,
+        },
       });
       await writeAuditLog({
         actor_id: ctx.session.user.id,
@@ -76,17 +97,27 @@ export const submissionRouter = createTRPCRouter({
         target_type: "submission",
         target_id: input.id,
         result: "success",
+        metadata: { checklist: input.checklist },
       });
       return updated;
     }),
 
   reject: reviewProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.string().uuid(), reason: z.string().trim().min(1).max(1000) }))
     .mutation(async ({ ctx, input }) => {
-      await loadSubmissionWithTenantCheck(ctx.db, ctx.session, input.id);
+      const submission = await loadSubmissionWithTenantCheck(ctx.db, ctx.session, input.id);
+      const transition = canTransition(submission.status, "rejected");
+      if (!transition.ok) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: transition.reason });
+      }
       const updated = await ctx.db.submission.update({
         where: { id: input.id },
-        data: { status: "rejected" },
+        data: {
+          status: "rejected",
+          reviewNote: input.reason,
+          reviewedAt: new Date(),
+          reviewedBy: ctx.session.user.id,
+        },
       });
       await writeAuditLog({
         actor_id: ctx.session.user.id,
@@ -94,6 +125,7 @@ export const submissionRouter = createTRPCRouter({
         target_type: "submission",
         target_id: input.id,
         result: "success",
+        metadata: { reason: input.reason },
       });
       return updated;
     }),

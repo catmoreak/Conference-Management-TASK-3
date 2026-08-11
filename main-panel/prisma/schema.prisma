@@ -88,6 +88,11 @@ model AuditLog {
   user_agent  String?
   occurred_at DateTime @default(now())
   result      String
+  // Structured, sanitized request metadata (objectKey, fileName, tenantId,
+  // etc.). Kept separate from `result` so `result` stays a clean status
+  // string (e.g. "success", "failure:s3_not_configured") that's actually
+  // queryable/filterable, instead of "success | {...json...}".
+  metadata    Json?
 
   @@map("audit_log")
 }
@@ -372,6 +377,25 @@ model Submission {
 
   // pending | approved | rejected -- CHECK constraint added in migration.sql
   status String @default("pending")
+
+  // Reviewer's reason when rejecting -- lets the presenter know what to fix.
+  reviewNote String? @map("review_note")
+
+  // Review metadata -- set whenever a reviewer makes a decision (approve or
+  // reject). "Reviewed" is deliberately not a separate status value: both
+  // approved and rejected inherently mean reviewed, so this is tracked as
+  // metadata instead of a status the state machine has to model.
+  reviewedAt DateTime? @map("reviewed_at")
+  reviewedBy String?   @map("reviewed_by")
+  // Which REVIEW_CHECKLIST_ITEMS (src/server/domain/submission-status.ts)
+  // were confirmed at approval time. Not required for rejection -- a
+  // reviewer can reject without having opened the file (wrong session,
+  // duplicate, etc.).
+  reviewChecklist Json? @map("review_checklist")
+
+  // Incremented each time a presenter replaces the file on this same
+  // submission via the check-in kiosk (e.g. after a rejection).
+  revisionCount Int @default(0) @map("revision_count")
 
   // File metadata -- populated by the check-in kiosk upload flow.
   objectKey   String? @map("object_key")

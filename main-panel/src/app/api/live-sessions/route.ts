@@ -5,6 +5,7 @@ import { db } from "~/server/db";
 import { getSession } from "~/server/better-auth/server";
 import { assertPermissions } from "~/server/auth/rbac";
 import { assertTenantAccess } from "~/server/auth/tenant";
+import { buildAllowedOrigins, withCorsHeaders } from "~/server/http/cors";
 
 /**
  * Authenticated live-session lookup for podium's "connect as display"
@@ -13,36 +14,7 @@ import { assertTenantAccess } from "~/server/auth/tenant";
  * read-only endpoint, so no CSRF concern, only CORS).
  */
 
-function getOriginFromUrl(urlValue: string | null | undefined): string | null {
-  if (!urlValue) return null;
-  try {
-    return new URL(urlValue).origin;
-  } catch {
-    return null;
-  }
-}
-
-const allowedOrigins = new Set(
-  [env.PODIUM_APP_URL, "http://localhost:5173", "http://127.0.0.1:5173"]
-    .map(getOriginFromUrl)
-    .filter((origin): origin is string => origin !== null),
-);
-
-function withCorsHeaders(response: NextResponse, request: Request): NextResponse {
-  const origin = request.headers.get("origin");
-  if (!origin || !allowedOrigins.has(origin)) {
-    return response;
-  }
-  const headers = new Headers(response.headers);
-  headers.set("Access-Control-Allow-Origin", origin);
-  headers.set("Access-Control-Allow-Credentials", "true");
-  headers.set("Vary", "Origin");
-  return new NextResponse(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
-}
+const allowedOrigins = buildAllowedOrigins(env.PODIUM_APP_URL);
 
 export async function OPTIONS(request: Request): Promise<Response> {
   const origin = request.headers.get("origin");
@@ -61,7 +33,7 @@ export async function GET(request: Request) {
   try {
     const session = await getSession();
     if (!session?.user) {
-      return withCorsHeaders(NextResponse.json({ error: "Unauthorized" }, { status: 401 }), request);
+      return withCorsHeaders(NextResponse.json({ error: "Unauthorized" }, { status: 401 }), request, allowedOrigins);
     }
 
     const user = session.user as Record<string, unknown>;
@@ -70,12 +42,16 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const eventId = searchParams.get("eventId");
     if (!eventId) {
-      return withCorsHeaders(NextResponse.json({ error: "eventId is required" }, { status: 400 }), request);
+      return withCorsHeaders(
+        NextResponse.json({ error: "eventId is required" }, { status: 400 }),
+        request,
+        allowedOrigins,
+      );
     }
 
     const event = await db.event.findUnique({ where: { id: eventId } });
     if (!event) {
-      return withCorsHeaders(NextResponse.json({ error: "Event not found" }, { status: 404 }), request);
+      return withCorsHeaders(NextResponse.json({ error: "Event not found" }, { status: 404 }), request, allowedOrigins);
     }
     assertTenantAccess(session, event.tenantId, true);
 
@@ -90,16 +66,21 @@ export async function GET(request: Request) {
       },
     });
 
-    return withCorsHeaders(NextResponse.json({ liveSessions }), request);
+    return withCorsHeaders(NextResponse.json({ liveSessions }), request, allowedOrigins);
   } catch (error: unknown) {
     const err = error as { status?: number; error?: string; message?: string };
     if (err.status) {
       return withCorsHeaders(
         NextResponse.json({ error: err.error ?? err.message }, { status: err.status }),
         request,
+        allowedOrigins,
       );
     }
     console.error("[live-sessions] Error:", error);
-    return withCorsHeaders(NextResponse.json({ error: "Internal server error" }, { status: 500 }), request);
+    return withCorsHeaders(
+      NextResponse.json({ error: "Internal server error" }, { status: 500 }),
+      request,
+      allowedOrigins,
+    );
   }
 }
