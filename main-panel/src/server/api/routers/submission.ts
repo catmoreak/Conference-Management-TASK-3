@@ -67,7 +67,7 @@ export const submissionRouter = createTRPCRouter({
       assertTenantAccess(ctx.session, ls.event.tenantId, true);
       return ctx.db.submission.findMany({
         where: { liveSessionId: input.liveSessionId, status: "approved", deletedAt: null },
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
         include: {
           presenter: { select: { id: true, displayName: true } },
         },

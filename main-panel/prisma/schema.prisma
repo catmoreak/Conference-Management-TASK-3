@@ -40,7 +40,7 @@ model User {
   posts         Post[]
 
   // Extended fields
-  role              Role        @default(staff)
+  role              Role        @default(reviewer)
   tenantId          String?     @map("tenant_id")
   status            String      @default("active")
   mustResetPassword Boolean     @default(false)
@@ -62,10 +62,18 @@ model User {
   @@map("user")
 }
 
+// Roles limited to exactly three: admin, reviewer, presenter.
+//   - admin: full access, including account/user management and file
+//     management (view/upload/delete/rename/reorder, sees who uploaded).
+//   - reviewer: can add/delete/reorder presentation files, review
+//     presenter-submitted material, but cannot manage accounts or rename
+//     files.
+//   - presenter: can reorder and present (drive the podium display),
+//     view/download files, but cannot upload/delete/rename.
 enum Role {
   admin
-  staff
-  pres_ops_staff
+  reviewer
+  presenter
 }
 
 model TwoFactor {
@@ -397,12 +405,19 @@ model Submission {
   // submission via the check-in kiosk (e.g. after a rejection).
   revisionCount Int @default(0) @map("revision_count")
 
-  // File metadata -- populated by the check-in kiosk upload flow.
+  // File metadata -- populated by the check-in kiosk upload flow, and also
+  // by the admin/reviewer direct file-manager upload (main-panel + podium
+  // "Session Files" feature). For directly-uploaded files, createdBy is the
+  // uploading admin/reviewer's user id (used to display "uploaded by").
   objectKey   String? @map("object_key")
   fileName    String? @map("file_name")
   fileSize    Int?    @map("file_size")
   contentType String? @map("content_type")
   publicUrl   String? @map("public_url")
+
+  // Display order of this file within its live session's file list.
+  // Reorderable by admin, reviewer and presenter roles.
+  sortOrder Int @default(0) @map("sort_order")
 
   deletedAt DateTime? @map("deleted_at")
   createdAt DateTime  @default(now()) @map("created_at")

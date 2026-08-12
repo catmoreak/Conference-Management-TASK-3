@@ -20,7 +20,7 @@ export default function RoomsPage() {
   const [formSortOrder, setFormSortOrder] = useState("0");
   const [error, setError] = useState("");
 
-  if (!user || (user.role !== "admin" && user.role !== "staff")) {
+  if (!user || (user.role !== "admin" && user.role !== "reviewer")) {
     router.replace("/");
     return null;
   }

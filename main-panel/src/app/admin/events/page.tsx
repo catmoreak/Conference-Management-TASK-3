@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { useAuth } from "~/app/_components/AuthProvider";
@@ -36,7 +36,7 @@ export default function AdminEventsPage() {
   const [formStatus, setFormStatus] = useState<EventStatus>("draft");
   const [error, setError] = useState("");
 
-  if (!user || (user.role !== "admin" && user.role !== "staff")) {
+  if (!user || (user.role !== "admin" && user.role !== "reviewer")) {
     router.replace("/");
     return null;
   }
@@ -167,7 +167,7 @@ export default function AdminEventsPage() {
                     <div className="flex flex-wrap gap-4 mt-2 text-xs text-text-muted">
                       {ev.startDate && <span>Start: {new Date(ev.startDate).toLocaleDateString()}</span>}
                       {ev.endDate && <span>End: {new Date(ev.endDate).toLocaleDateString()}</span>}
-                      {ev.location && <span>📍 {ev.location}</span>}
+                      {ev.location && <span>?? {ev.location}</span>}
                     </div>
                     <div className="flex gap-4 mt-2 text-xs text-text-secondary">
                       <span>{ev._count.rooms} room{ev._count.rooms !== 1 ? "s" : ""}</span>

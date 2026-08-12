@@ -18,10 +18,10 @@ export default async function Home() {
   // Post-login routing by role
   if (role === "admin") {
     redirect("/admin/accounts");
-  } else if (role === "staff") {
+  } else if (role === "reviewer") {
     redirect("/audit-logs");
   } else {
-    // pres_ops_staff or other roles
+    // presenter or other roles
     redirect("/podium");
   }
 

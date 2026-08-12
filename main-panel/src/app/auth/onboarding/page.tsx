@@ -27,9 +27,9 @@ export default function OnboardingPage() {
     if (user && !user.mustResetPassword) {
       if (user.role === "admin") {
         router.replace("/dashboard/admin");
-      } else if (user.role === "staff") {
+      } else if (user.role === "reviewer") {
         router.replace("/dashboard/staff");
-      } else if (user.role === "pres_ops_staff") {
+      } else if (user.role === "presenter") {
         router.replace("/dashboard/pres-ops");
       }
     }
@@ -297,9 +297,9 @@ export default function OnboardingPage() {
                   if (user) {
                     if (user.role === "admin") {
                       router.replace("/dashboard/admin");
-                    } else if (user.role === "staff") {
+                    } else if (user.role === "reviewer") {
                       router.replace("/dashboard/staff");
-                    } else if (user.role === "pres_ops_staff") {
+                    } else if (user.role === "presenter") {
                       router.replace("/dashboard/pres-ops");
                     }
                   }

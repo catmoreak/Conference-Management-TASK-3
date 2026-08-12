@@ -1,10 +1,17 @@
 /**
  * RBAC (Role-Based Access Control) — central permission map.
  *
- * Roles:
- *   - admin: full access to everything including account/user management
- *   - staff: full access except account/user management
- *   - pres_ops_staff: view/download materials + live-control operations only
+ * Roles (exactly 3 — no other role values are permitted):
+ *   - admin: full access to everything, including account/user management
+ *     and full file management (view/upload/delete/rename/reorder, sees
+ *     who uploaded each file).
+ *   - reviewer: can add (upload) presentation files, delete files, and
+ *     reorder them; also reviews/approves-or-rejects presenter-submitted
+ *     material from the check-in kiosk. Cannot manage accounts or rename
+ *     files.
+ *   - presenter: can reorder the file list and present (drive the podium
+ *     display) plus view/download files, but cannot upload, delete, or
+ *     rename them.
  */
 
 /** All permission keys used across the application. */
@@ -22,6 +29,8 @@ export type Permission =
   | "material:download"
   | "material:upload"
   | "material:delete"
+  | "material:rename"
+  | "material:reorder"
   | "material:review"
   // Events
   | "event:view"
@@ -42,7 +51,7 @@ export type Permission =
   // General
   | "dashboard:view";
 
-export type AppRole = "admin" | "staff" | "pres_ops_staff";
+export type AppRole = "admin" | "reviewer" | "presenter";
 
 /** Permissions granted to each role. */
 const ROLE_PERMISSIONS: Record<AppRole, ReadonlySet<Permission>> = {
@@ -55,11 +64,14 @@ const ROLE_PERMISSIONS: Record<AppRole, ReadonlySet<Permission>> = {
     "account:list",
     "account:mfa-reset",
     "session:revoke",
-    // Materials
+    // Materials — full control, including rename (the other two roles
+    // cannot rename files)
     "material:view",
     "material:download",
     "material:upload",
     "material:delete",
+    "material:rename",
+    "material:reorder",
     "material:review",
     // Events
     "event:view",
@@ -81,12 +93,13 @@ const ROLE_PERMISSIONS: Record<AppRole, ReadonlySet<Permission>> = {
     "dashboard:view",
   ]),
 
-  staff: new Set<Permission>([
-    // Materials
+  reviewer: new Set<Permission>([
+    // Materials — add, delete, reorder (no rename, no account management)
     "material:view",
     "material:download",
     "material:upload",
     "material:delete",
+    "material:reorder",
     "material:review",
     // Events
     "event:view",
@@ -108,15 +121,16 @@ const ROLE_PERMISSIONS: Record<AppRole, ReadonlySet<Permission>> = {
     "dashboard:view",
   ]),
 
-  pres_ops_staff: new Set<Permission>([
-    // Materials — view and download only, no upload
+  presenter: new Set<Permission>([
+    // Materials — view/download and reorder only, no upload/delete/rename
     "material:view",
     "material:download",
-    // Events, Rooms and Presenters — read-only (needed to pick what to operate on)
+    "material:reorder",
+    // Events, Rooms and Presenters — read-only (needed to pick what to present)
     "event:view",
     "room:view",
     "presenter:view",
-    // Live control
+    // Live control — drives the actual podium presentation
     "live-control:operate",
     "live-control:view",
     // General

@@ -32,7 +32,7 @@ export default function AuditLogsPage() {
   const [endDateFilter, setEndDateFilter] = useState("");
 
   useEffect(() => {
-    if (user && user.role !== "admin" && user.role !== "staff") {
+    if (user && user.role !== "admin" && user.role !== "reviewer") {
       router.replace("/");
     } else {
       void fetchLogs();

@@ -9,7 +9,7 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string;
-  role: "admin" | "staff" | "pres_ops_staff";
+  role: "admin" | "reviewer" | "presenter";
   status: "active" | "suspended";
   tenantId?: string | null;
   mustResetPassword: boolean;
@@ -54,9 +54,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else if (pathname.startsWith("/auth/onboarding") || pathname.startsWith("/auth/login") || pathname === "/") {
           if (u.role === "admin") {
             router.replace("/dashboard/admin");
-          } else if (u.role === "staff") {
+          } else if (u.role === "reviewer") {
             router.replace("/dashboard/staff");
-          } else if (u.role === "pres_ops_staff") {
+          } else if (u.role === "presenter") {
             router.replace("/dashboard/pres-ops");
           }
         }
@@ -93,9 +93,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else if (pathname.startsWith("/auth/onboarding") || pathname.startsWith("/auth/login") || pathname === "/") {
           if (u.role === "admin") {
             router.replace("/dashboard/admin");
-          } else if (u.role === "staff") {
+          } else if (u.role === "reviewer") {
             router.replace("/dashboard/staff");
-          } else if (u.role === "pres_ops_staff") {
+          } else if (u.role === "presenter") {
             router.replace("/dashboard/pres-ops");
           }
         }

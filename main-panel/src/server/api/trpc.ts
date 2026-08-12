@@ -214,17 +214,17 @@ export const adminProcedure = authedProcedure.use(({ ctx, next }) => {
 });
 
 /**
- * Staff procedure — accessible to admin and staff roles.
+ * Reviewer procedure — accessible to admin and reviewer roles.
  * Grants all permissions except account/user management.
  */
 export const staffProcedure = authedProcedure.use(({ ctx, next }) => {
   const role = (ctx.session.user as Record<string, unknown>).role as
     | string
     | undefined;
-  if (role !== "admin" && role !== "staff") {
+  if (role !== "admin" && role !== "reviewer") {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "Staff or administrator access required",
+      message: "Reviewer or administrator access required",
     });
   }
   return next({ ctx });
@@ -254,7 +254,7 @@ export const presOpsProcedure = authedProcedure.use(async ({ ctx, next }) => {
     checkName: "trpc:presOpsProcedure",
     actorId: userId,
     legacy: () => {
-      if (role !== "admin" && role !== "staff" && role !== "pres_ops_staff") {
+      if (role !== "admin" && role !== "reviewer" && role !== "presenter") {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Access denied for your role",

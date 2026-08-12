@@ -8,7 +8,7 @@ interface Account {
   id: string;
   name: string;
   email: string;
-  role: "admin" | "staff" | "pres_ops_staff";
+  role: "admin" | "reviewer" | "presenter";
   status: "active" | "suspended";
   tenantId?: string | null;
   mustResetPassword: boolean;
@@ -29,7 +29,7 @@ export default function AdminAccountsPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [roleSelection, setRoleSelection] = useState<"admin" | "staff" | "pres_ops_staff">("staff");
+  const [roleSelection, setRoleSelection] = useState<"admin" | "reviewer" | "presenter">("reviewer");
   const [tenantId, setTenantId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -125,7 +125,7 @@ export default function AdminAccountsPage() {
     }
   };
 
-  const handleChangeRole = async (userId: string, newRole: "admin" | "staff" | "pres_ops_staff") => {
+  const handleChangeRole = async (userId: string, newRole: "admin" | "reviewer" | "presenter") => {
     setError("");
     try {
       const res = await fetch("/api/admin/manage-account", {
@@ -239,13 +239,13 @@ export default function AdminAccountsPage() {
                       <select
                         aria-label={`Change role for ${acc.name}`}
                         value={acc.role}
-                        onChange={(e) => void handleChangeRole(acc.id, e.target.value as "admin" | "staff" | "pres_ops_staff")}
+                        onChange={(e) => void handleChangeRole(acc.id, e.target.value as "admin" | "reviewer" | "presenter")}
                         disabled={acc.id === user?.id}
                         className="bg-white border border-border-soft hover:border-accent-slate text-text-primary text-xs rounded-lg px-2.5 py-1.5 transition focus:outline-none focus:ring-1 focus:ring-accent-blue"
                       >
                         <option value="admin">Administrator</option>
-                        <option value="staff">Staff</option>
-                        <option value="pres_ops_staff">Podium Staff</option>
+                        <option value="reviewer">Reviewer</option>
+                        <option value="presenter">Presenter</option>
                       </select>
                     </td>
                     <td className="px-6 py-4">
@@ -370,12 +370,12 @@ export default function AdminAccountsPage() {
                 <select
                   id="new-role"
                   value={roleSelection}
-                  onChange={(e) => setRoleSelection(e.target.value as "admin" | "staff" | "pres_ops_staff")}
+                  onChange={(e) => setRoleSelection(e.target.value as "admin" | "reviewer" | "presenter")}
                   className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 transition focus:ring-2 focus:ring-accent-blue outline-none"
                 >
                   <option value="admin">Administrator</option>
-                  <option value="staff">Staff</option>
-                  <option value="pres_ops_staff">Podium Operations Staff</option>
+                  <option value="reviewer">Reviewer</option>
+                  <option value="presenter">Presenter</option>
                 </select>
               </div>
 

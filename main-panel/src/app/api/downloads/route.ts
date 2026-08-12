@@ -43,7 +43,7 @@ const downloadRequestSchema = z.object({
  *   - Requires valid Better Auth session cookie
  *   - Enforces onboarding gates (password reset + MFA)
  *   - RBAC: requires "material:download" permission
- *   - Additional check: pres_ops_staff cannot download "original" files
+ *   - Additional check: presenter cannot download "original" files
  *   - CSRF validation for the POST request
  *   - Every download request is logged to AuditLog
  *   - Presigned URLs expire quickly and are scoped to one S3 object
@@ -112,10 +112,10 @@ export async function POST(request: Request) {
     const { fileType, fileId, fileName, objectKey } = parsed.data;
 
     // ── Role-specific restriction ────────────────────────────────────
-    // pres_ops_staff can view/download display packages but NOT originals
-    if (fileType === "original" && role === "pres_ops_staff") {
+    // presenter can view/download display packages but NOT originals
+    if (fileType === "original" && role === "presenter") {
       return NextResponse.json(
-        { error: "Presentation operations staff cannot download original files" },
+        { error: "Presenters cannot download original files" },
         { status: 403 },
       );
     }

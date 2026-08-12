@@ -47,7 +47,7 @@ export function Navbar() {
               </Link>
             </>
           )}
-          {(user.role === "admin" || user.role === "staff") && (
+          {(user.role === "admin" || user.role === "reviewer") && (
             <>
               <Link
                 href="/admin/events"
@@ -67,7 +67,15 @@ export function Navbar() {
               </Link>
             </>
           )}
-          {user.role === "pres_ops_staff" && (
+          <Link
+            href="/dashboard/files"
+            className={`px-3 py-2 rounded text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-accent-blue ${
+              isActive("/dashboard/files") ? "bg-accent-blue text-white shadow-hard-sm" : "text-text-secondary hover:text-text-primary hover:bg-bg-primary"
+            }`}
+          >
+            Files
+          </Link>
+          {user.role === "presenter" && (
             <span className="text-sm bg-accent-sage/10 text-accent-sage border border-accent-sage/30 px-3 py-1.5 rounded font-medium shadow-hard-sm">
               Podium Presenter Mode
             </span>

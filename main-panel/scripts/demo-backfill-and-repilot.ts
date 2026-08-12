@@ -43,8 +43,8 @@ const DEMO_USERS = [
   { email: "demo-admin-notenant@example.invalid", role: "admin" as const, tenantId: null, expectMismatchAfterBackfill: false },
   // audit:read was added to event_admin/operator since this script was
   // first written -- both now expected to resolve cleanly too.
-  { email: "demo-staff@example.invalid", role: "staff" as const, tenantId: "tenant-demo-a", expectMismatchAfterBackfill: false },
-  { email: "demo-presops@example.invalid", role: "pres_ops_staff" as const, tenantId: "tenant-demo-a", expectMismatchAfterBackfill: false },
+  { email: "demo-staff@example.invalid", role: "reviewer" as const, tenantId: "tenant-demo-a", expectMismatchAfterBackfill: false },
+  { email: "demo-presops@example.invalid", role: "presenter" as const, tenantId: "tenant-demo-a", expectMismatchAfterBackfill: false },
 ];
 
 async function main() {

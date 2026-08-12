@@ -73,8 +73,8 @@ async function signInWithRetry(email: string, password: string): Promise<Respons
 
 const ACTORS = [
   { email: "cp4-admin@example.invalid", role: "admin" as const },
-  { email: "cp4-staff@example.invalid", role: "staff" as const },
-  { email: "cp4-presops@example.invalid", role: "pres_ops_staff" as const },
+  { email: "cp4-staff@example.invalid", role: "reviewer" as const },
+  { email: "cp4-presops@example.invalid", role: "presenter" as const },
 ];
 const TENANT = "tenant-cp4-test";
 
@@ -140,7 +140,7 @@ async function main() {
     // general, but explicitly denied "original" files by a role check AFTER
     // RBAC passes -- exercises a real behavioral branch beyond the shadow wiring.
     {
-      const cookie = cookies["pres_ops_staff"]!;
+      const cookie = cookies["presenter"]!;
       const res = await fetch(`${BASE_URL}/api/downloads`, {
         method: "POST",
         headers: { cookie, origin: BASE_URL, "content-type": "application/json" },
@@ -225,7 +225,7 @@ async function main() {
 
       const SESSION_A = "11111111-1111-1111-1111-111111111111";
       const SESSION_B = "22222222-2222-2222-2222-222222222222";
-      const staffId = userIds["staff"]!;
+      const staffId = userIds["reviewer"]!;
 
       // staffId has zero role assignments -- deny.
       const connections1 = {

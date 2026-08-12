@@ -62,7 +62,7 @@ export const auth = betterAuth({
     additionalFields: {
       role: {
         type: "string",
-        defaultValue: "staff",
+        defaultValue: "reviewer",
       },
       tenantId: {
         type: "string",
@@ -85,7 +85,7 @@ export const auth = betterAuth({
       issuer: "Conference Management",
     }),
     admin({
-      defaultRole: "staff",
+      defaultRole: "reviewer",
     }),
   ],
 

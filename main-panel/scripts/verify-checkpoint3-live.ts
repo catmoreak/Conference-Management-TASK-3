@@ -42,8 +42,8 @@ function assert(condition: boolean, label: string) {
 
 const ACTORS = [
   { email: "cp3-admin@example.invalid", role: "admin" as const },
-  { email: "cp3-staff@example.invalid", role: "staff" as const },
-  { email: "cp3-presops@example.invalid", role: "pres_ops_staff" as const },
+  { email: "cp3-staff@example.invalid", role: "reviewer" as const },
+  { email: "cp3-presops@example.invalid", role: "presenter" as const },
 ];
 const TENANT = "tenant-cp3-test";
 const TARGET_EMAIL = "cp3-target@example.invalid"; // never signed in, only acted upon

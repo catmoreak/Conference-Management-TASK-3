@@ -49,6 +49,11 @@ export default function App() {
   const [displayState, setDisplayState] = useState("disconnected");
   const wsClientRef = useRef(null);
 
+  const [sessionFiles, setSessionFiles] = useState([]);
+  const [sessionFilesLoading, setSessionFilesLoading] = useState(false);
+  const [renamingFileId, setRenamingFileId] = useState(null);
+  const [renameValue, setRenameValue] = useState("");
+
   const user = session.data?.user ?? null;
   const t = translations[lang];
   const statusText = (key) => (key === "signIn" ? t.signIn : key === "twoFactorRequired" ? t.twoFactorRequired : "");
@@ -262,7 +267,16 @@ export default function App() {
     }
     fetch(`${mainPanelAuthUrl}/api/live-sessions?eventId=${displayEventId}`, { credentials: "include" })
       .then((r) => r.json())
-      .then((data) => setLiveSessions(data.liveSessions ?? []))
+      .then((data) => {
+        const list = data.liveSessions ?? [];
+        setLiveSessions(list);
+        // Most events only have one session (auto-created with the
+        // event), so auto-select it instead of forcing a second manual
+        // picker when there's nothing to actually choose between.
+        setDisplaySessionId((current) =>
+          list.some((s) => s.id === current) ? current : (list[0]?.id ?? ""),
+        );
+      })
       .catch(() => setLiveSessions([]));
   }, [displayEventId]);
 
@@ -271,6 +285,122 @@ export default function App() {
       wsClientRef.current?.disconnect();
     };
   }, []);
+
+  const fetchSessionFiles = () => {
+    if (!displaySessionId) {
+      setSessionFiles([]);
+      return;
+    }
+    setSessionFilesLoading(true);
+    fetch(`${mainPanelAuthUrl}/api/live-sessions/${displaySessionId}/files`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((data) => setSessionFiles(data.files ?? []))
+      .catch(() => setSessionFiles([]))
+      .finally(() => setSessionFilesLoading(false));
+  };
+
+  useEffect(() => {
+    fetchSessionFiles();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displaySessionId]);
+
+  const role = user?.role;
+  const canUploadFiles = role === "admin" || role === "reviewer";
+  const canDeleteFiles = role === "admin" || role === "reviewer";
+  const canRenameFiles = role === "admin";
+  const canReorderFiles = role === "admin" || role === "reviewer" || role === "presenter";
+
+  const handleSessionFileUpload = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !displaySessionId) return;
+    setUploading(true);
+    setError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch(`${mainPanelAuthUrl}/api/live-sessions/${displaySessionId}/files`, {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setNotificationMessage("error", payload.error || t.notif.uploadFailedFor(file.name));
+        return;
+      }
+      setNotificationMessage("success", t.notif.filesUploaded(1));
+      fetchSessionFiles();
+    } catch (uploadError) {
+      setNotificationMessage("error", getAuthErrorMessage(uploadError, t.notif.uploadFailedFor(file.name)));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSessionFileDelete = async (fileId) => {
+    if (!window.confirm("Delete this file? This cannot be undone.")) return;
+    try {
+      const response = await fetch(`${mainPanelAuthUrl}/api/live-sessions/${displaySessionId}/files/${fileId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        setNotificationMessage("error", payload.error || t.notif.uploadFailed);
+        return;
+      }
+      fetchSessionFiles();
+    } catch (deleteError) {
+      setNotificationMessage("error", getAuthErrorMessage(deleteError, t.notif.uploadFailed));
+    }
+  };
+
+  const handleSessionFileRenameSubmit = async (fileId) => {
+    if (!renameValue.trim()) return;
+    try {
+      const response = await fetch(`${mainPanelAuthUrl}/api/live-sessions/${displaySessionId}/files/${fileId}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: renameValue.trim() }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        setNotificationMessage("error", payload.error || "Rename failed.");
+        return;
+      }
+      setRenamingFileId(null);
+      fetchSessionFiles();
+    } catch (renameError) {
+      setNotificationMessage("error", getAuthErrorMessage(renameError, "Rename failed."));
+    }
+  };
+
+  const persistSessionFileOrder = async (nextFiles) => {
+    setSessionFiles(nextFiles);
+    try {
+      const response = await fetch(`${mainPanelAuthUrl}/api/live-sessions/${displaySessionId}/files/reorder`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order: nextFiles.map((f) => f.id) }),
+      });
+      if (!response.ok) throw new Error("Reorder failed.");
+    } catch (reorderError) {
+      setNotificationMessage("error", getAuthErrorMessage(reorderError, "Reorder failed."));
+      fetchSessionFiles();
+    }
+  };
+
+  const moveSessionFile = (index, direction) => {
+    const target = index + direction;
+    if (target < 0 || target >= sessionFiles.length) return;
+    const next = [...sessionFiles];
+    const [moved] = next.splice(index, 1);
+    next.splice(target, 0, moved);
+    void persistSessionFileOrder(next);
+  };
 
   const handleConnectDisplay = async () => {
     if (!displaySessionId || !user) return;
@@ -543,6 +673,7 @@ export default function App() {
                 value={displaySessionId}
                 onChange={(e) => setDisplaySessionId(e.target.value)}
                 disabled={!displayEventId || displayState === "connected"}
+                style={{ display: liveSessions.length > 1 ? undefined : "none" }}
               >
                 <option value="">{t.selectLiveSession}</option>
                 {liveSessions.map((ls) => (
@@ -565,6 +696,137 @@ export default function App() {
               )}
               <span className="upload-hint">{t.displayStatus[displayState] ?? displayState}</span>
             </div>
+          </section>
+
+          <section className="upload-panel">
+            <div className="upload-header">
+              <h2>Session Files</h2>
+              <p>
+                Presentation files for the selected live session — shared live with the main-panel file manager.
+                {!canUploadFiles && " Your role can reorder and view/download files here."}
+              </p>
+            </div>
+
+            {!displaySessionId ? (
+              <span className="upload-hint">Select a live session above to see its files.</span>
+            ) : sessionFilesLoading ? (
+              <span className="upload-hint">Loading files…</span>
+            ) : (
+              <>
+                {canUploadFiles && (
+                  <div className="upload-actions" style={{ marginBottom: 12 }}>
+                    <label className="file-picker">
+                      <input
+                        type="file"
+                        accept=".pptx,.pptm,.ppt,.pdf"
+                        disabled={uploading}
+                        onChange={(event) => void handleSessionFileUpload(event)}
+                      />
+                    </label>
+                    {uploading ? <span className="upload-hint">{t.uploading}</span> : null}
+                  </div>
+                )}
+
+                {sessionFiles.length === 0 ? (
+                  <span className="upload-hint">No files uploaded for this session yet.</span>
+                ) : (
+                  <ul className="upload-list">
+                    {sessionFiles.map((item, index) => (
+                      <li key={item.id}>
+                        <span className="upload-item-links">
+                          {canReorderFiles && (
+                            <span className="upload-item-actions" style={{ marginRight: 8 }}>
+                              <button
+                                type="button"
+                                className="item-action-btn"
+                                disabled={index === 0}
+                                onClick={() => moveSessionFile(index, -1)}
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                className="item-action-btn"
+                                disabled={index === sessionFiles.length - 1}
+                                onClick={() => moveSessionFile(index, 1)}
+                              >
+                                ↓
+                              </button>
+                            </span>
+                          )}
+                          {renamingFileId === item.id ? (
+                            <>
+                              <input
+                                value={renameValue}
+                                onChange={(e) => setRenameValue(e.target.value)}
+                                style={{ marginRight: 6 }}
+                              />
+                              <button
+                                type="button"
+                                className="item-action-btn"
+                                onClick={() => void handleSessionFileRenameSubmit(item.id)}
+                              >
+                                Save
+                              </button>
+                              <button type="button" className="item-action-btn" onClick={() => setRenamingFileId(null)}>
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <span className="upload-item-name">{item.fileName ?? "Untitled"}</span>
+                          )}
+                          <span className="upload-item-actions">
+                            {item.publicUrl && isPowerPointFile(item.fileName ?? "") ? (
+                              <>
+                                <button
+                                  className="item-action-btn preview-btn"
+                                  onClick={() => handlePreviewInWindow({ publicUrl: item.publicUrl, name: item.fileName })}
+                                >
+                                  {t.presentInWindow}
+                                </button>
+                                <button
+                                  className="item-action-btn open-btn"
+                                  disabled={openingFile}
+                                  onClick={() => handleOpenInApp({ publicUrl: item.publicUrl, name: item.fileName })}
+                                >
+                                  {openingFile ? t.opening : t.openInPowerPoint}
+                                </button>
+                              </>
+                            ) : item.publicUrl ? (
+                              <a href={item.publicUrl} target="_blank" rel="noreferrer">{t.view}</a>
+                            ) : null}
+                            {canRenameFiles && renamingFileId !== item.id && (
+                              <button
+                                type="button"
+                                className="item-action-btn"
+                                onClick={() => {
+                                  setRenamingFileId(item.id);
+                                  setRenameValue(item.fileName ?? "");
+                                }}
+                              >
+                                Rename
+                              </button>
+                            )}
+                            {canDeleteFiles && (
+                              <button
+                                type="button"
+                                className="item-action-btn"
+                                onClick={() => void handleSessionFileDelete(item.id)}
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </span>
+                        </span>
+                        <span>
+                          {formatBytes(item.fileSize ?? 0)} · uploaded by {item.uploadedBy}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
           </section>
 
           <section className="upload-panel">

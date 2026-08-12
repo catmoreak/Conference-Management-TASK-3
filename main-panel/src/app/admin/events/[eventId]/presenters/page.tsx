@@ -20,7 +20,7 @@ export default function PresentersPage() {
   const [formNotes, setFormNotes] = useState("");
   const [error, setError] = useState("");
 
-  if (!user || (user.role !== "admin" && user.role !== "staff")) {
+  if (!user || (user.role !== "admin" && user.role !== "reviewer")) {
     router.replace("/");
     return null;
   }

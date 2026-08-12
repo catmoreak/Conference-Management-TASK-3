@@ -24,7 +24,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${geist.variable}`}>
-      <body className="bg-bg-primary text-text-primary min-h-screen">
+      <body
+        className="bg-bg-primary text-text-primary min-h-screen"
+        suppressHydrationWarning
+      >
         <TRPCReactProvider>
           <AuthProvider>
             <div className="flex flex-col min-h-screen">

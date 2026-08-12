@@ -21,7 +21,7 @@ const createAccountSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1),
   password: z.string().min(8),
-  role: z.enum(["admin", "staff", "pres_ops_staff"]),
+  role: z.enum(["admin", "reviewer", "presenter"]),
   tenantId: z.string().min(1),
 });
 
@@ -39,7 +39,7 @@ const unsuspendAccountSchema = z.object({
 const changeRoleSchema = z.object({
   action: z.literal("change-role"),
   userId: z.string().min(1),
-  role: z.enum(["admin", "staff", "pres_ops_staff"]),
+  role: z.enum(["admin", "reviewer", "presenter"]),
 });
 
 // ── Route handler ─────────────────────────────────────────────────────

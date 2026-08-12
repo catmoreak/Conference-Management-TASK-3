@@ -95,7 +95,7 @@ export const eventRouter = createTRPCRouter({
           message: "Tenant client record not found — create the client first",
         });
       }
-      return ctx.db.event.create({
+      const event = await ctx.db.event.create({
         data: {
           id: crypto.randomUUID(),
           tenantId,
@@ -107,6 +107,24 @@ export const eventRouter = createTRPCRouter({
           status: "draft",
         },
       });
+
+      // Auto-create a default live session so the event is immediately
+      // ready to receive files — users shouldn't have to understand or set
+      // up Rooms/Sessions/Presenters just to upload a presentation. Power
+      // users can still add more sessions/rooms later if they need them
+      // (e.g. multi-track events); this one is just there so the simple
+      // "one event, one file list" case works with zero extra steps.
+      await ctx.db.liveSession.create({
+        data: {
+          id: crypto.randomUUID(),
+          eventId: event.id,
+          name: "Main Session",
+          status: "scheduled",
+          sortOrder: 0,
+        },
+      });
+
+      return event;
     }),
 
   /** Update event details or status. Enforces tenant isolation. */
