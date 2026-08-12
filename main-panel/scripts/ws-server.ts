@@ -29,7 +29,16 @@
 import fs from "node:fs";
 import http from "node:http";
 import https from "node:https";
+import path from "node:path";
+import dotenv from "dotenv";
 import { WebSocketServer, WebSocket } from "ws";
+
+// This script runs standalone via `tsx` (not through Next.js), so .env
+// is not loaded automatically the way it is for `next dev`/`next start`.
+// Without this, WS_JWT_SECRET falls back to the dev-only default here
+// while the Next.js app signs tokens with the real secret from .env --
+// causing every connection to fail with "invalid_signature".
+dotenv.config({ path: path.resolve(import.meta.dirname, "..", ".env") });
 import { validateWsConnect } from "../src/server/auth/ws-connect";
 import { roleHasPermissions } from "../src/server/auth/rbac";
 
@@ -194,6 +203,11 @@ wss.on("connection", (ws: WebSocket, req) => {
           room.displays.add(ws);
         }
 
+        console.log(
+          `[podium-ws] auth ok: session=${liveSessionId} purpose=${purpose} role=${role} ` +
+            `displaysInRoom=${room.displays.size} hasControl=${Boolean(room.control)}`,
+        );
+
         send(ws, {
           type: "status",
           sessionId: liveSessionId,
@@ -220,11 +234,15 @@ wss.on("connection", (ws: WebSocket, req) => {
         sendError(ws, "forbidden", "Role lacks live-control:operate permission");
         return;
       }
+      console.log(
+        `[podium-ws] relaying ${msg.type as string} from control to ${room.displays.size} display(s) in session=${liveSessionId}`,
+      );
       for (const display of room.displays) {
         send(display, msg);
       }
     } else if (purpose === "display") {
       // Relay status/error updates from the display back to the operator.
+      console.log(`[podium-ws] display->control relay: ${JSON.stringify(msg)}`);
       if (room.control) {
         send(room.control, msg);
       }

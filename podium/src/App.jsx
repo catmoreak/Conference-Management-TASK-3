@@ -426,11 +426,33 @@ export default function App() {
         user.id,
         data.token,
         controller,
+        {
+          // Only flip to "connected" once the server actually confirms the
+          // auth handshake -- calling connect() merely opens the socket, it
+          // doesn't guarantee the server accepted it (bad/expired token,
+          // wrong signature, etc. all fail silently otherwise, leaving the
+          // UI stuck showing "connected" while operator commands have
+          // nowhere to go).
+          onAuthSuccess: () => {
+            setDisplayState("connected");
+            setNotificationMessage("success", t.notif.connectedAsDisplay);
+          },
+          onAuthError: (code, message) => {
+            setDisplayState("error");
+            setNotificationMessage("error", `${t.notif.failedToConnect}: ${message} (${code})`);
+            wsClientRef.current?.disconnect();
+            wsClientRef.current = null;
+          },
+          onClose: () => {
+            setDisplayState((prev) => (prev === "connected" || prev === "connecting" ? "disconnected" : prev));
+          },
+          onSocketError: () => {
+            setDisplayState("error");
+          },
+        },
       );
       wsClientRef.current = client;
       client.connect();
-      setDisplayState("connected");
-      setNotificationMessage("success", t.notif.connectedAsDisplay);
     } catch (err) {
       setDisplayState("error");
       setNotificationMessage("error", getAuthErrorMessage(err, t.notif.failedToConnect));

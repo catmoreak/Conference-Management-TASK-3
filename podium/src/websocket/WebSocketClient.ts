@@ -2,13 +2,32 @@ import type { PodiumAuthHandshake, PodiumHeartbeat, PodiumCommand, PodiumStatus,
 import type { PresentationController } from "../presentation/PresentationController";
 import { validatePodiumCommand } from "./commandValidator";
 
+/**
+ * Lifecycle hooks so callers (e.g. the display-connect UI) can reflect the
+ * *real* handshake outcome instead of assuming success as soon as connect()
+ * is called -- connect() only opens the socket, it doesn't guarantee the
+ * server accepted the auth handshake.
+ */
+export interface WebSocketClientHooks {
+  /** Fired once the server confirms the auth handshake ({type:"status", status:"connected"}). */
+  onAuthSuccess?: () => void;
+  /** Fired when the server rejects the handshake or any other error frame arrives before that. */
+  onAuthError?: (code: string, message: string) => void;
+  /** Fired when the socket closes, at any point in its lifecycle. */
+  onClose?: (event: CloseEvent) => void;
+  /** Fired on a transport-level WebSocket error. */
+  onSocketError?: (event: Event) => void;
+}
+
 export class WebSocketClient {
   private readonly url: string;
   private readonly serviceId: string;
   private readonly token: string;
   private readonly presentationController: PresentationController | null;
+  private readonly hooks: WebSocketClientHooks;
   private socket: WebSocket | null = null;
   private authHandshakeSent = false;
+  private authConfirmed = false;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempt = 0;
@@ -19,11 +38,18 @@ export class WebSocketClient {
    * The constructor stores the connection parameters so the class can evolve
    * into a richer client without changing the public shape.
    */
-  constructor(url: string, serviceId: string, token: string, presentationController?: PresentationController) {
+  constructor(
+    url: string,
+    serviceId: string,
+    token: string,
+    presentationController?: PresentationController,
+    hooks?: WebSocketClientHooks,
+  ) {
     this.url = url;
     this.serviceId = serviceId;
     this.token = token;
     this.presentationController = presentationController ?? null;
+    this.hooks = hooks ?? {};
 
     if (this.presentationController) {
       this.presentationController.onStateChange((state) => {
@@ -65,6 +91,7 @@ export class WebSocketClient {
 
     this.isDisconnecting = false;
     this.authHandshakeSent = false;
+    this.authConfirmed = false;
     this.socket = new WebSocket(this.url);
     this.attachEventHandlers();
 
@@ -85,6 +112,7 @@ export class WebSocketClient {
     this.socket = null;
     this.isDisconnecting = true;
     this.authHandshakeSent = false;
+    this.authConfirmed = false;
     this.stopHeartbeat();
     this.stopReconnectTimer();
 
@@ -113,9 +141,11 @@ export class WebSocketClient {
 
     this.socket.addEventListener("close", (event: CloseEvent) => {
       this.stopHeartbeat();
+      this.authConfirmed = false;
       console.info(
         `[Podium WebSocket] Disconnected: ${this.serviceId} (code=${event.code}, reason=${event.reason || "none"})`,
       );
+      this.hooks.onClose?.(event);
 
       if (!this.isDisconnecting) {
         this.scheduleReconnect();
@@ -124,6 +154,7 @@ export class WebSocketClient {
 
     this.socket.addEventListener("error", (event: Event) => {
       console.error(`[Podium WebSocket] Connection error: ${this.serviceId}`, event);
+      this.hooks.onSocketError?.(event);
     });
 
     this.socket.addEventListener("message", (event: MessageEvent) => {
@@ -158,18 +189,59 @@ export class WebSocketClient {
       return;
     }
 
+    let parsed: unknown;
     try {
-      const parsed = JSON.parse(rawData) as unknown;
-      const command = validatePodiumCommand(parsed);
-
-      if (!command) {
-        return;
-      }
-
-      await this.routeCommand(command);
+      parsed = JSON.parse(rawData);
     } catch {
       console.warn("[Podium WebSocket] Unable to parse incoming message.");
+      return;
     }
+
+    // The server's first post-handshake reply is either a {type:"status",
+    // status:"connected"} confirmation or a {type:"error", code, message}
+    // rejection (e.g. invalid_signature, control_locked, forbidden) --
+    // neither of those is a PodiumCommand, so this must be checked before
+    // validatePodiumCommand() would otherwise silently discard it.
+    if (this.isRecord(parsed) && !this.authConfirmed) {
+      if (parsed.type === "status" && parsed.status === "connected") {
+        this.authConfirmed = true;
+        this.hooks.onAuthSuccess?.();
+      } else if (parsed.type === "error") {
+        const code = typeof parsed.code === "string" ? parsed.code : "unknown";
+        const message = typeof parsed.message === "string" ? parsed.message : "Connection rejected";
+        this.hooks.onAuthError?.(code, message);
+      }
+    }
+
+    const command = validatePodiumCommand(parsed);
+
+    if (!command) {
+      return;
+    }
+
+    // Deliberately a separate try/catch from the JSON.parse above -- a
+    // command that fails during execution (IPC bridge missing, PowerPoint
+    // COM failure, etc.) is NOT a parse error, and previously fell into the
+    // same catch block, which only logged "Unable to parse incoming
+    // message" and swallowed the real failure entirely. The operator
+    // console never saw it, so a broken load_presentation/play looked
+    // identical to success with no error reported anywhere.
+    try {
+      await this.routeCommand(command);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[Podium WebSocket] Command '${command.type}' failed:`, err);
+      this.sendError({
+        type: "error",
+        sessionId: command.sessionId,
+        code: "presentation_error",
+        message,
+      });
+    }
+  }
+
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null;
   }
 
   public sendStatus(status: PodiumStatus): void {

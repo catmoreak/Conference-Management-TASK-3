@@ -164,6 +164,22 @@ export async function getPresignedDownloadUrl(
     return null;
   }
 
+  // Signing a GetObject request always requires real IAM credentials --
+  // there's no anonymous equivalent to S3_ALLOW_ANONYMOUS_PUT for reads.
+  // When no static credentials are configured, the bucket is assumed to
+  // already serve objects publicly (the same assumption
+  // S3_PUBLIC_BASE_URL/getPublicObjectUrl already makes for other callers),
+  // so just hand back the public URL instead of attempting to sign.
+  if (!hasStaticCredentials()) {
+    const publicUrl = getPublicObjectUrl(opts.objectKey);
+    if (!publicUrl) {
+      throw new Error(
+        "S3_PUBLIC_BASE_URL is required to build a playback URL when no S3 credentials are configured",
+      );
+    }
+    return { url: publicUrl, expiresIn: opts.ttlSeconds };
+  }
+
   const client = getS3Client();
   const command = new GetObjectCommand({
     Bucket: process.env.S3_BUCKET!,
