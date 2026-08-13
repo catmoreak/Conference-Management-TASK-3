@@ -18,6 +18,7 @@ const geist = Geist({
 
 import { AuthProvider } from "~/app/_components/AuthProvider";
 import { Navbar } from "~/app/_components/Navbar";
+import { TopBar } from "~/app/_components/TopBar";
 
 export default function RootLayout({
   children,
@@ -30,9 +31,12 @@ export default function RootLayout({
       >
         <TRPCReactProvider>
           <AuthProvider>
-            <div className="flex flex-col min-h-screen">
+            <div className="flex h-screen overflow-hidden bg-[#F8FAFC]">
               <Navbar />
-              <main className="flex-1 flex flex-col">{children}</main>
+              <div className="flex-1 flex flex-col min-w-0 h-full">
+                <TopBar />
+                <main className="flex-1 overflow-y-auto">{children}</main>
+              </div>
             </div>
           </AuthProvider>
         </TRPCReactProvider>

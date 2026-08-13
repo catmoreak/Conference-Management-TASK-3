@@ -126,39 +126,40 @@ export default function StaffDashboard() {
   }
 
   return (
-    <div className="flex-1 bg-bg-primary text-text-secondary p-8">
+    <div className="flex-1 bg-[#F8FAFC] text-text-secondary p-8">
       <div className="max-w-5xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">Staff Dashboard</h1>
-            <p className="text-text-secondary text-sm mt-1">
+            <h1 className="text-2xl font-bold text-[#0B1220] tracking-tight">Staff Dashboard</h1>
+            <p className="text-gray-500 text-xs mt-1">
               Review presentation materials submitted through the check-in kiosk.
             </p>
           </div>
           <button
             onClick={() => void signOut()}
-            className="bg-bg-secondary hover:bg-white text-text-primary border border-border-soft font-semibold px-4 py-2.5 rounded-lg text-sm transition shadow-hard hover:shadow-hard-hover"
+            className="bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-semibold px-4 py-2.5 rounded-xl text-sm transition shadow-sm"
           >
             Sign Out
           </button>
         </div>
 
         {user && (
-          <div className="bg-bg-secondary border border-border-soft p-4 rounded-lg text-sm mb-6 shadow-hard-sm">
-            Signed in as <span className="font-bold text-text-primary">{user.name}</span>{" "}
-            <span className="text-accent-blue capitalize">({user.role})</span>
+          <div className="bg-white border border-gray-200 p-4 rounded-xl text-xs mb-6 shadow-sm flex items-center gap-2">
+            <span>Signed in as:</span>
+            <span className="font-bold text-[#0B1220]">{user.name}</span>
+            <span className="px-2 py-0.5 text-[10px] font-bold bg-[#10B981]/15 text-[#10B981] rounded-full uppercase tracking-wider">{user.role}</span>
           </div>
         )}
 
-        <div className="mb-6">
-          <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="event-select">
-            Event
+        <div className="mb-6 max-w-md">
+          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2" htmlFor="event-select">
+            Event Filter
           </label>
           <select
             id="event-select"
             value={eventId}
             onChange={(e) => setEventId(e.target.value)}
-            className="w-full max-w-md bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none"
+            className="w-full bg-white border border-gray-200 text-text-primary text-sm rounded-xl px-3 py-2.5 focus:border-[#0B1220] focus:ring-2 focus:ring-[#0B1220]/10 outline-none transition"
           >
             <option value="">— Select an event —</option>
             {(events ?? []).map((ev) => (
@@ -170,32 +171,36 @@ export default function StaffDashboard() {
         </div>
 
         {error && (
-          <div className="mb-4 p-4 bg-error/10 border border-error/30 rounded-lg text-error text-sm" role="alert">
-            {error}
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm flex gap-3" role="alert">
+            <span className="font-semibold" aria-hidden="true">⚠️</span>
+            <span>{error}</span>
           </div>
         )}
 
         {!eventId ? (
-          <div className="bg-bg-secondary border border-border-soft rounded-xl p-10 text-center text-text-muted shadow-hard">
-            Select an event to review its submissions.
+          <div className="bg-white border border-gray-200 rounded-xl p-12 text-center shadow-sm flex flex-col items-center justify-center">
+            <svg className="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+            </svg>
+            <span className="text-sm font-semibold text-gray-400">Select an event to review its submissions.</span>
           </div>
         ) : isLoading ? (
-          <div className="py-20 text-center text-text-secondary">Loading submissions...</div>
+          <div className="py-20 text-center text-gray-400 font-semibold">Loading submissions...</div>
         ) : (
-          <div className="grid gap-3">
+          <div className="grid gap-4">
             {(submissions ?? []).map((s) => (
               <div
                 key={s.id}
-                className="bg-bg-secondary border border-border-soft rounded-xl p-5 shadow-hard hover:shadow-hard-hover transition"
+                className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow transition"
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-1">
-                      <h2 className="text-base font-bold text-text-primary truncate">
+                      <h2 className="text-base font-bold text-[#0B1220] truncate">
                         {s.fileName ?? "Untitled file"}
                       </h2>
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border shadow-hard-sm ${STATUS_COLORS[s.status] ?? ""}`}
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border tracking-wider uppercase ${STATUS_COLORS[s.status] ?? ""}`}
                       >
                         {s.status}
                       </span>
@@ -205,11 +210,11 @@ export default function StaffDashboard() {
                         </span>
                       )}
                     </div>
-                    <div className="flex flex-wrap gap-4 text-xs text-text-muted mt-1">
-                      {s.presenter && <span>Presenter: {s.presenter.displayName}</span>}
+                    <div className="flex flex-wrap gap-4 text-xs text-text-muted mt-2">
+                      {s.presenter && <span>Presenter: <strong className="text-text-primary">{s.presenter.displayName}</strong></span>}
                       {s.liveSession && (
                         <span>
-                          Session: {s.liveSession.name}
+                          Session: <strong className="text-text-primary">{s.liveSession.name}</strong>
                           {s.liveSession.room && ` (${s.liveSession.room.name})`}
                         </span>
                       )}
@@ -218,40 +223,40 @@ export default function StaffDashboard() {
                       {s.reviewedAt && <span>Reviewed {new Date(s.reviewedAt).toLocaleString()}</span>}
                     </div>
                     {s.reviewNote && (
-                      <p className={`mt-2 text-xs ${s.status === "rejected" ? "text-error" : "text-text-muted"}`}>
-                        {s.status === "rejected" ? "Rejection reason: " : "Previous reviewer note: "}
+                      <p className={`mt-3 text-xs p-3 bg-gray-50 rounded-lg ${s.status === "rejected" ? "text-red-600 border border-red-100" : "text-text-muted border border-gray-100"}`}>
+                        <strong>{s.status === "rejected" ? "Rejection reason: " : "Previous reviewer note: "}</strong>
                         {s.reviewNote}
                       </p>
                     )}
                     {reviewingId === s.id && (
-                      <div className="mt-3 p-4 bg-bg-primary border border-border-soft rounded-lg">
-                        <p className="text-xs font-semibold text-text-primary mb-2">
+                      <div className="mt-4 p-4 bg-gray-50 border border-gray-100 rounded-xl">
+                        <p className="text-xs font-bold text-[#0B1220] mb-3">
                           Confirm before approving:
                         </p>
-                        <div className="space-y-1.5">
+                        <div className="space-y-2">
                           {CHECKLIST_ITEMS.map((item) => (
-                            <label key={item.key} className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
+                            <label key={item.key} className="flex items-center gap-2.5 text-xs text-text-secondary cursor-pointer hover:text-text-primary">
                               <input
                                 type="checkbox"
                                 checked={checklist[item.key]}
                                 onChange={() => toggleChecklistItem(item.key)}
-                                className="accent-accent-blue"
+                                className="accent-[#10B981] w-4 h-4 rounded"
                               />
                               {item.label}
                             </label>
                           ))}
                         </div>
-                        <div className="flex gap-2 mt-3">
+                        <div className="flex gap-2 mt-4">
                           <button
                             disabled={!checklistComplete || approveMutation.isPending}
                             onClick={() => confirmApprove(s.id)}
-                            className="px-3 py-1.5 rounded text-xs font-semibold bg-success/10 hover:bg-success/20 text-success border border-success/30 transition shadow-hard-sm disabled:opacity-50"
+                            className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#10B981] hover:bg-[#0D9488] text-white transition shadow-sm disabled:opacity-50"
                           >
                             {approveMutation.isPending ? "Approving..." : "Confirm Approve"}
                           </button>
                           <button
                             onClick={() => setReviewingId(null)}
-                            className="px-3 py-1.5 rounded text-xs font-semibold bg-bg-secondary hover:bg-white text-text-secondary border border-border-soft transition shadow-hard-sm"
+                            className="px-4 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 transition shadow-sm"
                           >
                             Cancel
                           </button>
@@ -264,7 +269,7 @@ export default function StaffDashboard() {
                       <button
                         disabled={viewingId === s.id}
                         onClick={() => void handleView(s)}
-                        className="px-3 py-1.5 rounded text-xs font-semibold bg-bg-primary hover:bg-white text-text-secondary border border-border-soft transition shadow-hard-sm disabled:opacity-50"
+                        className="px-4 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 transition shadow-sm disabled:opacity-50"
                       >
                         {viewingId === s.id ? "Opening..." : "View"}
                       </button>
@@ -273,14 +278,14 @@ export default function StaffDashboard() {
                       <>
                         <button
                           onClick={() => openReview(s.id)}
-                          className="px-3 py-1.5 rounded text-xs font-semibold bg-success/10 hover:bg-success/20 text-success border border-success/30 transition shadow-hard-sm disabled:opacity-50"
+                          className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#10B981]/10 hover:bg-[#10B981]/20 text-[#10B981] border border-[#10B981]/30 transition shadow-sm disabled:opacity-50"
                         >
                           Approve
                         </button>
                         <button
                           disabled={rejectMutation.isPending}
                           onClick={() => handleReject(s.id)}
-                          className="px-3 py-1.5 rounded text-xs font-semibold bg-error/10 hover:bg-error/20 text-error border border-error/30 transition shadow-hard-sm disabled:opacity-50"
+                          className="px-4 py-2 rounded-xl text-xs font-semibold bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition shadow-sm disabled:opacity-50"
                         >
                           Reject
                         </button>
@@ -291,8 +296,11 @@ export default function StaffDashboard() {
               </div>
             ))}
             {(submissions ?? []).length === 0 && (
-              <div className="bg-bg-secondary border border-border-soft rounded-xl p-10 text-center text-text-muted shadow-hard">
-                No submissions yet for this event.
+              <div className="bg-white border border-gray-200 rounded-xl p-12 text-center shadow-sm flex flex-col items-center justify-center">
+                <svg className="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                </svg>
+                <span className="text-sm font-semibold text-gray-400">No submissions yet for this event.</span>
               </div>
             )}
           </div>

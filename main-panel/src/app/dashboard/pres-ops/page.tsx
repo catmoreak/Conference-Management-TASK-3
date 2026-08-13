@@ -142,27 +142,27 @@ export default function PresOpsDashboard() {
   }
 
   return (
-    <div className="flex-1 bg-bg-primary text-text-secondary p-8">
+    <div className="flex-1 bg-[#F8FAFC] text-text-secondary p-8">
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">Live Control</h1>
-            <p className="text-text-secondary text-sm mt-1">
+            <h1 className="text-2xl font-bold text-[#0B1220] tracking-tight">Live Control</h1>
+            <p className="text-gray-500 text-xs mt-1">
               Connect to a live session and drive the podium display in real time.
             </p>
           </div>
           <button
             onClick={() => void signOut()}
-            className="bg-bg-secondary hover:bg-white text-text-primary border border-border-soft font-semibold px-4 py-2.5 rounded-lg text-sm transition shadow-hard hover:shadow-hard-hover"
+            className="bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-semibold px-4 py-2.5 rounded-xl text-sm transition shadow-sm"
           >
             Sign Out
           </button>
         </div>
 
-        <div className="bg-bg-secondary border border-border-soft rounded-xl p-6 shadow-hard-lg space-y-4 mb-6">
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4 mb-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="ev-select">
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2" htmlFor="ev-select">
                 Event
               </label>
               <select
@@ -173,7 +173,7 @@ export default function PresOpsDashboard() {
                   setLiveSessionId("");
                   setSubmissionId("");
                 }}
-                className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none"
+                className="w-full bg-white border border-gray-200 text-text-primary text-sm rounded-xl px-3 py-2.5 focus:border-[#0B1220] focus:ring-2 focus:ring-[#0B1220]/10 outline-none transition"
               >
                 <option value="">— Select —</option>
                 {(events ?? []).map((ev) => (
@@ -185,7 +185,7 @@ export default function PresOpsDashboard() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="ls-select">
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2" htmlFor="ls-select">
                 Live Session
               </label>
               <select
@@ -196,7 +196,7 @@ export default function PresOpsDashboard() {
                   setLiveSessionId(e.target.value);
                   setSubmissionId("");
                 }}
-                className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none disabled:opacity-50"
+                className="w-full bg-white border border-gray-200 text-text-primary text-sm rounded-xl px-3 py-2.5 focus:border-[#0B1220] focus:ring-2 focus:ring-[#0B1220]/10 outline-none transition disabled:opacity-50"
               >
                 <option value="">— Select —</option>
                 {(sessions ?? []).map((s) => (
@@ -208,7 +208,7 @@ export default function PresOpsDashboard() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="sub-select">
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2" htmlFor="sub-select">
                 Approved File
               </label>
               <select
@@ -216,7 +216,7 @@ export default function PresOpsDashboard() {
                 value={submissionId}
                 disabled={!liveSessionId}
                 onChange={(e) => setSubmissionId(e.target.value)}
-                className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none disabled:opacity-50"
+                className="w-full bg-white border border-gray-200 text-text-primary text-sm rounded-xl px-3 py-2.5 focus:border-[#0B1220] focus:ring-2 focus:ring-[#0B1220]/10 outline-none transition disabled:opacity-50"
               >
                 <option value="">— Select —</option>
                 {(submissions ?? []).map((s) => (
@@ -228,14 +228,14 @@ export default function PresOpsDashboard() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 pt-2">
+          <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
             <span
-              className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border shadow-hard-sm ${
+              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border tracking-wider uppercase shadow-sm ${
                 connState === "connected"
-                  ? "bg-success/10 text-success border-success/30"
+                  ? "bg-[#10B981]/15 text-[#10B981] border-[#10B981]/30"
                   : connState === "locked" || connState === "error"
-                    ? "bg-error/10 text-error border-error/30"
-                    : "bg-bg-primary text-text-secondary border-border-soft"
+                    ? "bg-red-50 text-red-600 border border-red-200"
+                    : "bg-gray-100 text-gray-600 border-gray-200"
               }`}
             >
               {connState}
@@ -243,7 +243,7 @@ export default function PresOpsDashboard() {
             {connState === "connected" ? (
               <button
                 onClick={handleDisconnect}
-                className="px-3 py-1.5 rounded text-xs font-semibold bg-error/10 hover:bg-error/20 text-error border border-error/30 transition shadow-hard-sm"
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition shadow-sm"
               >
                 Disconnect
               </button>
@@ -251,7 +251,7 @@ export default function PresOpsDashboard() {
               <button
                 disabled={!liveSessionId || connState === "connecting"}
                 onClick={() => void handleConnect()}
-                className="px-3 py-1.5 rounded text-xs font-semibold bg-accent-blue/10 hover:bg-accent-blue/20 text-accent-blue border border-accent-blue/30 transition shadow-hard-sm disabled:opacity-50"
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#0B1220] hover:bg-[#1A253C] text-white transition shadow-sm disabled:opacity-50"
               >
                 Connect
               </button>
@@ -259,53 +259,53 @@ export default function PresOpsDashboard() {
           </div>
         </div>
 
-        <div className="bg-bg-secondary border border-border-soft rounded-xl p-6 shadow-hard-lg mb-6">
-          <h2 className="text-sm font-semibold text-text-primary uppercase tracking-wider mb-4">Playback Controls</h2>
-          <div className="flex flex-wrap gap-2">
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Playback Controls</h2>
+          <div className="flex flex-wrap gap-2.5">
             <button
               disabled={!canOperate || !selectedSubmission || loadingFile}
               onClick={() => void handleLoad()}
-              className="px-4 py-2 rounded-lg text-sm font-semibold bg-accent-blue hover:bg-accent-blue/90 text-white transition shadow-hard hover:shadow-hard-hover disabled:opacity-50"
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-[#0B1220] hover:bg-[#1A253C] text-white transition shadow-sm disabled:opacity-50"
             >
               {loadingFile ? "Loading..." : "Load"}
             </button>
             <button
               disabled={!canOperate}
               onClick={() => sendCommand({ type: "play" })}
-              className="px-4 py-2 rounded-lg text-sm font-semibold bg-bg-primary hover:bg-white text-text-primary border border-border-soft transition shadow-hard hover:shadow-hard-hover disabled:opacity-50"
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 transition shadow-sm disabled:opacity-50"
             >
               Play
             </button>
             <button
               disabled={!canOperate}
               onClick={() => sendCommand({ type: "prev_slide" })}
-              className="px-4 py-2 rounded-lg text-sm font-semibold bg-bg-primary hover:bg-white text-text-primary border border-border-soft transition shadow-hard hover:shadow-hard-hover disabled:opacity-50"
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 transition shadow-sm disabled:opacity-50"
             >
               ← Prev
             </button>
             <button
               disabled={!canOperate}
               onClick={() => sendCommand({ type: "next_slide" })}
-              className="px-4 py-2 rounded-lg text-sm font-semibold bg-bg-primary hover:bg-white text-text-primary border border-border-soft transition shadow-hard hover:shadow-hard-hover disabled:opacity-50"
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 transition shadow-sm disabled:opacity-50"
             >
               Next →
             </button>
             <button
               disabled={!canOperate}
               onClick={() => sendCommand({ type: "exit_slideshow" })}
-              className="px-4 py-2 rounded-lg text-sm font-semibold bg-error/10 hover:bg-error/20 text-error border border-error/30 transition shadow-hard-sm disabled:opacity-50"
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition shadow-sm disabled:opacity-50"
             >
               Exit
             </button>
           </div>
         </div>
 
-        <div className="bg-bg-secondary border border-border-soft rounded-xl p-6 shadow-hard">
-          <h2 className="text-sm font-semibold text-text-primary uppercase tracking-wider mb-3">Activity Log</h2>
-          <div className="font-mono text-xs text-text-secondary space-y-1 max-h-56 overflow-y-auto">
-            {log.length === 0 && <p className="text-text-muted">No activity yet.</p>}
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Activity Log</h2>
+          <div className="font-mono text-xs text-text-secondary space-y-1.5 max-h-56 overflow-y-auto">
+            {log.length === 0 && <p className="text-gray-400 font-semibold">No activity yet.</p>}
             {log.map((line, i) => (
-              <p key={i}>{line}</p>
+              <p key={i} className="border-b border-gray-50 pb-1">{line}</p>
             ))}
           </div>
         </div>

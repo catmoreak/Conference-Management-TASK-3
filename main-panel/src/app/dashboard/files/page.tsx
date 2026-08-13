@@ -189,20 +189,20 @@ export default function SessionFilesPage() {
   }
 
   return (
-    <div className="flex-1 bg-bg-primary text-text-secondary p-8">
+    <div className="flex-1 bg-[#F8FAFC] text-text-secondary p-8">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">Presentation Files</h1>
-          <p className="text-text-secondary text-sm mt-1">
+          <h1 className="text-2xl font-bold text-[#0B1220] tracking-tight">Presentation Files</h1>
+          <p className="text-gray-500 text-xs mt-1">
             Upload, rename, delete and reorder the PowerPoint/PDF files for an event. This list is shared
             live with the podium display app.
           </p>
         </div>
 
-        <div className="bg-bg-secondary border border-border-soft rounded-xl p-6 shadow-hard-lg space-y-4 mb-6">
+        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4 mb-6">
           <div className={`grid grid-cols-1 gap-4 ${(sessions ?? []).length > 1 ? "sm:grid-cols-2" : ""}`}>
             <div>
-              <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="ev-select">
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2" htmlFor="ev-select">
                 Event
               </label>
               <select
@@ -212,7 +212,7 @@ export default function SessionFilesPage() {
                   setEventId(e.target.value);
                   setLiveSessionId("");
                 }}
-                className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none"
+                className="w-full bg-white border border-gray-200 text-text-primary text-sm rounded-xl px-3 py-2.5 focus:border-[#0B1220] focus:ring-2 focus:ring-[#0B1220]/10 outline-none transition"
               >
                 <option value="">— Select an event —</option>
                 {(events ?? []).map((ev) => (
@@ -222,20 +222,16 @@ export default function SessionFilesPage() {
                 ))}
               </select>
             </div>
-            {/* Most events only have one session (auto-created with the
-                event), so this picker only shows up when there's actually
-                a choice to make — otherwise it would just be a confusing
-                extra step. */}
             {(sessions ?? []).length > 1 && (
               <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="ls-select">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2" htmlFor="ls-select">
                   Session
                 </label>
                 <select
                   id="ls-select"
                   value={liveSessionId}
                   onChange={(e) => setLiveSessionId(e.target.value)}
-                  className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none"
+                  className="w-full bg-white border border-gray-200 text-text-primary text-sm rounded-xl px-3 py-2.5 focus:border-[#0B1220] focus:ring-2 focus:ring-[#0B1220]/10 outline-none transition"
                 >
                   {(sessions ?? []).map((s) => (
                     <option key={s.id} value={s.id}>
@@ -249,13 +245,13 @@ export default function SessionFilesPage() {
 
           {canUpload && liveSessionId && (
             <div>
-              <label className="block text-xs font-semibold text-text-secondary mb-1">Add a file</label>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Add a file</label>
               <input
                 type="file"
                 accept=".pptx,.pptm,.ppt,.pdf"
                 disabled={uploading}
                 onChange={(e) => void handleUpload(e)}
-                className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2"
+                className="w-full bg-white border border-gray-200 text-text-primary text-sm rounded-xl px-3 py-2.5 transition focus:border-[#0B1220]"
               />
               {uploading && <p className="text-xs text-text-secondary mt-1">Uploading…</p>}
             </div>
@@ -263,40 +259,51 @@ export default function SessionFilesPage() {
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-error/10 border border-error/30 rounded-lg text-error text-sm" role="alert">
-            {error}
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm flex gap-3" role="alert">
+            <span className="font-semibold" aria-hidden="true">⚠️</span>
+            <span>{error}</span>
           </div>
         )}
 
         {!liveSessionId ? (
-          <p className="text-text-secondary text-sm">Select an event above to view and upload its files.</p>
+          <div className="bg-white border border-gray-200 rounded-xl p-12 text-center shadow-sm flex flex-col items-center justify-center">
+            <svg className="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 016 3.75h3.879a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18A2.25 2.25 0 0120.25 9v.776" />
+            </svg>
+            <span className="text-sm font-semibold text-gray-400">Select an event above to view and upload its files.</span>
+          </div>
         ) : loading ? (
-          <p className="text-text-secondary text-sm">Loading files…</p>
+          <p className="text-gray-400 text-sm font-semibold">Loading files…</p>
         ) : files.length === 0 ? (
-          <p className="text-text-secondary text-sm">No files uploaded for this event yet.</p>
+          <div className="bg-white border border-gray-200 rounded-xl p-12 text-center shadow-sm flex flex-col items-center justify-center">
+            <svg className="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+            <span className="text-sm font-semibold text-gray-400">No files uploaded for this event yet.</span>
+          </div>
         ) : (
-          <div className="bg-bg-secondary border border-border-soft rounded-xl overflow-hidden shadow-hard-lg">
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-white border-b border-border-soft text-text-secondary text-xs font-semibold uppercase tracking-wider">
-                  <th className="px-4 py-3">Order</th>
-                  <th className="px-4 py-3">File</th>
-                  <th className="px-4 py-3">Size</th>
-                  <th className="px-4 py-3">Uploaded by</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
+                <tr className="bg-gray-50 border-b border-gray-200 text-gray-400 text-[10px] font-bold uppercase tracking-wider">
+                  <th className="px-6 py-3.5">Order</th>
+                  <th className="px-6 py-3.5">File</th>
+                  <th className="px-6 py-3.5">Size</th>
+                  <th className="px-6 py-3.5">Uploaded by</th>
+                  <th className="px-6 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border-soft text-sm">
+              <tbody className="divide-y divide-gray-100 text-xs">
                 {files.map((f, index) => (
-                  <tr key={f.id} className="hover:bg-white transition">
-                    <td className="px-4 py-3">
+                  <tr key={f.id} className="hover:bg-gray-50/50 transition">
+                    <td className="px-6 py-4">
                       {canReorder ? (
-                        <div className="flex gap-1">
+                        <div className="flex gap-1.5">
                           <button
                             type="button"
                             disabled={index === 0}
                             onClick={() => moveFile(index, -1)}
-                            className="px-2 py-1 rounded bg-bg-primary border border-border-soft text-xs disabled:opacity-30"
+                            className="px-2 py-1 rounded-lg bg-white border border-gray-200 text-[10px] hover:bg-gray-50 disabled:opacity-30 transition font-bold"
                             aria-label={`Move ${f.fileName ?? "file"} up`}
                           >
                             ↑
@@ -305,7 +312,7 @@ export default function SessionFilesPage() {
                             type="button"
                             disabled={index === files.length - 1}
                             onClick={() => moveFile(index, 1)}
-                            className="px-2 py-1 rounded bg-bg-primary border border-border-soft text-xs disabled:opacity-30"
+                            className="px-2 py-1 rounded-lg bg-white border border-gray-200 text-[10px] hover:bg-gray-50 disabled:opacity-30 transition font-bold"
                             aria-label={`Move ${f.fileName ?? "file"} down`}
                           >
                             ↓
@@ -315,50 +322,50 @@ export default function SessionFilesPage() {
                         <span className="text-xs text-text-muted">{index + 1}</span>
                       )}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-6 py-4">
                       {renamingId === f.id ? (
                         <div className="flex gap-2">
                           <input
                             value={renameValue}
                             onChange={(e) => setRenameValue(e.target.value)}
-                            className="bg-white border border-border-soft rounded px-2 py-1 text-sm"
+                            className="bg-white border border-gray-200 rounded-lg px-2 py-1 text-sm focus:border-[#0B1220] outline-none"
                           />
                           <button
                             type="button"
                             onClick={() => void handleRenameSubmit(f.id)}
-                            className="text-xs text-accent-blue font-semibold"
+                            className="text-xs text-[#0B1220] font-bold hover:underline"
                           >
                             Save
                           </button>
                           <button
                             type="button"
                             onClick={() => setRenamingId(null)}
-                            className="text-xs text-text-secondary"
+                            className="text-xs text-gray-500 font-semibold hover:underline"
                           >
                             Cancel
                           </button>
                         </div>
                       ) : (
-                        <div className="font-semibold text-text-primary">
+                        <div className="font-bold text-[#0B1220]">
                           {f.fileName ?? "Untitled"}
                           {f.presenter && (
-                            <span className="block text-xs text-text-secondary font-normal">{f.presenter.displayName}</span>
+                            <span className="block text-[10px] text-gray-400 font-semibold mt-0.5">{f.presenter.displayName}</span>
                           )}
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-text-secondary">{formatBytes(f.fileSize)}</td>
-                    <td className="px-4 py-3 text-text-secondary">
-                      {f.uploadedBy}
-                      <span className="block text-[10px] text-text-muted">{new Date(f.uploadedAt).toLocaleString()}</span>
+                    <td className="px-6 py-4 text-text-secondary font-medium">{formatBytes(f.fileSize)}</td>
+                    <td className="px-6 py-4 text-text-secondary">
+                      <span className="font-semibold text-text-primary">{f.uploadedBy}</span>
+                      <span className="block text-[10px] text-gray-400 font-semibold mt-0.5">{new Date(f.uploadedAt).toLocaleString()}</span>
                     </td>
-                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <td className="px-6 py-4 text-right whitespace-nowrap space-x-3">
                       {f.publicUrl && (
                         <a
                           href={getPreviewUrl(f) ?? f.publicUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-xs text-accent-blue underline mr-3"
+                          className="text-xs text-[#10B981] font-bold hover:underline"
                         >
                           View
                         </a>
@@ -370,7 +377,7 @@ export default function SessionFilesPage() {
                             setRenamingId(f.id);
                             setRenameValue(f.fileName ?? "");
                           }}
-                          className="text-xs text-text-secondary underline mr-3"
+                          className="text-xs text-gray-600 font-semibold hover:underline"
                         >
                           Rename
                         </button>
@@ -379,7 +386,7 @@ export default function SessionFilesPage() {
                         <button
                           type="button"
                           onClick={() => void handleDelete(f.id)}
-                          className="text-xs text-error underline"
+                          className="text-xs text-red-500 font-bold hover:underline"
                         >
                           Delete
                         </button>
