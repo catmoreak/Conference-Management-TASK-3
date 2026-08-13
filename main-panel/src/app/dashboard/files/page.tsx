@@ -15,6 +15,8 @@ interface SessionFile {
   uploadedBy: string;
   uploadedAt: string;
   presenter: { id: string; displayName: string } | null;
+  itemType: "file" | "cover";
+  coverText: string | null;
 }
 
 function formatBytes(bytes: number | null): string {
@@ -50,6 +52,8 @@ export default function SessionFilesPage() {
   const [uploading, setUploading] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [coverText, setCoverText] = useState("");
+  const [addingCover, setAddingCover] = useState(false);
 
   const { data: events } = api.event.list.useQuery();
   const { data: sessions } = api.liveSession.listByEvent.useQuery(
@@ -129,6 +133,27 @@ export default function SessionFilesPage() {
     }
   }
 
+  async function handleAddCover() {
+    if (!coverText.trim() || !liveSessionId) return;
+    setAddingCover(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/live-sessions/${liveSessionId}/files/cover`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ coverText: coverText.trim() }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed to add cover slide");
+      setCoverText("");
+      await fetchFiles();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add cover slide");
+    } finally {
+      setAddingCover(false);
+    }
+  }
+
   async function handleDelete(fileId: string) {
     if (!confirm("Delete this file? This cannot be undone.")) return;
     setError("");
@@ -142,14 +167,16 @@ export default function SessionFilesPage() {
     }
   }
 
-  async function handleRenameSubmit(fileId: string) {
+  async function handleRenameSubmit(file: SessionFile) {
     if (!renameValue.trim()) return;
     setError("");
     try {
-      const res = await fetch(`/api/live-sessions/${liveSessionId}/files/${fileId}`, {
+      const res = await fetch(`/api/live-sessions/${liveSessionId}/files/${file.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName: renameValue.trim() }),
+        body: JSON.stringify(
+          file.itemType === "cover" ? { coverText: renameValue.trim() } : { fileName: renameValue.trim() },
+        ),
       });
       const data = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Rename failed");
@@ -256,6 +283,37 @@ export default function SessionFilesPage() {
               {uploading && <p className="text-xs text-text-secondary mt-1">Uploading…</p>}
             </div>
           )}
+
+          {canUpload && liveSessionId && (
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">
+                Add a cover slide
+              </label>
+              <p className="text-[11px] text-gray-400 mb-2">
+                A plain text screen (e.g. the event name) you can drop between files to keep the projector lit
+                during a gap.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={coverText}
+                  onChange={(e) => setCoverText(e.target.value)}
+                  placeholder="e.g. this event's name"
+                  disabled={addingCover}
+                  maxLength={200}
+                  className="flex-1 bg-white border border-gray-200 text-text-primary text-sm rounded-xl px-3 py-2.5 focus:border-[#0B1220] focus:ring-2 focus:ring-[#0B1220]/10 outline-none transition"
+                />
+                <button
+                  type="button"
+                  disabled={addingCover || !coverText.trim()}
+                  onClick={() => void handleAddCover()}
+                  className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-[#0B1220] hover:bg-[#1A253C] text-white transition shadow-sm disabled:opacity-50 whitespace-nowrap"
+                >
+                  {addingCover ? "Adding…" : "Add cover"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {error && (
@@ -332,7 +390,7 @@ export default function SessionFilesPage() {
                           />
                           <button
                             type="button"
-                            onClick={() => void handleRenameSubmit(f.id)}
+                            onClick={() => void handleRenameSubmit(f)}
                             className="text-xs text-[#0B1220] font-bold hover:underline"
                           >
                             Save
@@ -345,6 +403,13 @@ export default function SessionFilesPage() {
                             Cancel
                           </button>
                         </div>
+                      ) : f.itemType === "cover" ? (
+                        <div className="font-bold text-[#0B1220]">
+                          <span className="inline-block px-1.5 py-0.5 mr-1.5 rounded text-[9px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-600 border border-indigo-200">
+                            Cover
+                          </span>
+                          {f.coverText ?? "Untitled"}
+                        </div>
                       ) : (
                         <div className="font-bold text-[#0B1220]">
                           {f.fileName ?? "Untitled"}
@@ -354,7 +419,9 @@ export default function SessionFilesPage() {
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-text-secondary font-medium">{formatBytes(f.fileSize)}</td>
+                    <td className="px-6 py-4 text-text-secondary font-medium">
+                      {f.itemType === "cover" ? "—" : formatBytes(f.fileSize)}
+                    </td>
                     <td className="px-6 py-4 text-text-secondary">
                       <span className="font-semibold text-text-primary">{f.uploadedBy}</span>
                       <span className="block text-[10px] text-gray-400 font-semibold mt-0.5">{new Date(f.uploadedAt).toLocaleString()}</span>
@@ -375,7 +442,7 @@ export default function SessionFilesPage() {
                           type="button"
                           onClick={() => {
                             setRenamingId(f.id);
-                            setRenameValue(f.fileName ?? "");
+                            setRenameValue((f.itemType === "cover" ? f.coverText : f.fileName) ?? "");
                           }}
                           className="text-xs text-gray-600 font-semibold hover:underline"
                         >

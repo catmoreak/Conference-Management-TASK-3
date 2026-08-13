@@ -123,6 +123,14 @@ export default function PresOpsDashboard() {
     if (!selectedSubmission) return;
     setLoadingFile(true);
     try {
+      if (selectedSubmission.itemType === "cover") {
+        sendCommand({
+          type: "show_cover",
+          presentationId: selectedSubmission.id,
+          text: selectedSubmission.coverText ?? "",
+        });
+        return;
+      }
       // Fetched fresh right before use -- short-lived presigned URL
       // (300s TTL), not the submission's old permanent public link.
       const res = await fetch(`/api/submissions/${selectedSubmission.id}/playback-url`);
@@ -221,7 +229,9 @@ export default function PresOpsDashboard() {
                 <option value="">— Select —</option>
                 {(submissions ?? []).map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.fileName ?? s.id} {s.presenter ? `— ${s.presenter.displayName}` : ""}
+                    {s.itemType === "cover"
+                      ? `— ${s.coverText ?? "Cover"} —`
+                      : `${s.fileName ?? s.id} ${s.presenter ? `— ${s.presenter.displayName}` : ""}`}
                   </option>
                 ))}
               </select>

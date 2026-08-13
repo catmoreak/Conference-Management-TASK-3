@@ -386,6 +386,18 @@ model Submission {
   // pending | approved | rejected -- CHECK constraint added in migration.sql
   status String @default("pending")
 
+  // file | cover -- CHECK constraint added in migration.sql. "cover" rows
+  // are lightweight interstitial slides (e.g. a title/idle screen shown
+  // between two real presentations) with no uploaded file at all -- every
+  // file-related column below stays null for them. Reuses this same table
+  // (rather than a separate model) so covers sit in the exact same
+  // sortOrder-ed, reorderable, deletable list as real files.
+  itemType String @default("file") @map("item_type")
+
+  // Free text shown on a "cover" item's display screen (e.g. the event
+  // name, "Coffee Break"). Only populated when itemType = "cover".
+  coverText String? @map("cover_text")
+
   // Reviewer's reason when rejecting -- lets the presenter know what to fix.
   reviewNote String? @map("review_note")
 

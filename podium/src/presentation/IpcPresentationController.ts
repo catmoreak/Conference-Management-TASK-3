@@ -47,6 +47,10 @@ export class IpcPresentationController implements PresentationController {
     return { totalSlides: result.status?.totalSlides ?? 0 };
   }
 
+  async showCover(text: string, presentationId: string): Promise<void> {
+    await this.run({ type: "show_cover", text, presentationId });
+  }
+
   async play(): Promise<void> {
     await this.run({ type: "play" });
   }

@@ -128,10 +128,12 @@ let liveEmbeddedWindow = null;
 let liveState = 'offline';
 
 /**
- * Opens a PPTX/PDF in an embedded Office Online viewer (falling back to
- * Google Docs viewer if Office Online errors), inside its own
- * Electron-controlled BrowserWindow -- not native PowerPoint. Shared by
- * both the live-control flow and the manual preview/open-in-app feature.
+ * Creates the BrowserWindow shell shared by the live-control embedded
+ * viewer (real files, via loadFileIntoViewer) and the cover-slide screen
+ * (via loadCoverIntoViewer) -- window chrome, Chrome user-agent spoof, and
+ * the optional emergency-exit wiring are identical either way; only what
+ * gets loaded into the window differs. Also shared by the manual
+ * preview/open-in-app feature.
  *
  * @param {{ emergencyExit?: boolean }} [options] - When true (live-control
  *   path only), injects a visible on-screen "Exit Presentation" button and
@@ -140,7 +142,7 @@ let liveState = 'offline';
  *   or keyboard, so this is the operator's/presenter's only way to bail out
  *   locally without going back to the main-panel dashboard.
  */
-function createEmbeddedViewerWindow(fileUrl, title, options = {}) {
+function createLiveViewerWindowShell(title, options = {}) {
   const win = new BrowserWindow({
     width: 1366,
     height: 768,
@@ -209,10 +211,19 @@ function createEmbeddedViewerWindow(fileUrl, title, options = {}) {
     };
 
     // Re-injected on every load -- the Office Online -> Google Docs fallback
-    // navigates to a whole new page, which wipes out any previous injection.
+    // (or a fresh cover load) navigates to a whole new page, which wipes
+    // out any previous injection.
     win.webContents.on('did-finish-load', injectEmergencyExitButton);
   }
 
+  return win;
+}
+
+/**
+ * Loads a PPTX/PDF into a viewer window via Office Online, falling back to
+ * Google Docs viewer if Office Online errors -- not native PowerPoint.
+ */
+function loadFileIntoViewer(win, fileUrl) {
   // Try Office Online first; if it errors, fall back to Google Docs viewer
   const officeUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(fileUrl)}`;
   win.loadURL(officeUrl);
@@ -225,8 +236,31 @@ function createEmbeddedViewerWindow(fileUrl, title, options = {}) {
       }
     }).catch(() => {});
   });
+}
 
-  return win;
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Loads a plain-text "cover" screen into a viewer window -- fills the
+ * projector with large centered text (e.g. the event name) instead of a
+ * real presentation, so it doesn't go dark between two presentations.
+ */
+function loadCoverIntoViewer(win, text) {
+  const html = `<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Cover</title></head>
+<body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#090d16;color:#f8fafc;font:600 6vw/1.3 -apple-system, Segoe UI, Arial, sans-serif;text-align:center;padding:0 6vw;box-sizing:border-box;">
+  <div>${escapeHtml(text)}</div>
+</body>
+</html>`;
+  win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html));
 }
 
 /**
@@ -253,9 +287,7 @@ app.whenReady().then(() => {
           // The embedded viewer fetches directly from the (public/presigned)
           // fileUrl over HTTP -- no local download needed here, unlike the
           // PowerPoint COM path this replaces.
-          const newWin = createEmbeddedViewerWindow(cmd.fileUrl, cmd.presentationId, {
-            emergencyExit: true,
-          });
+          const newWin = createLiveViewerWindowShell(cmd.presentationId, { emergencyExit: true });
           liveEmbeddedWindow = newWin;
           newWin.on('closed', () => {
             // Guard against a stale 'closed' event from an OLD window
@@ -277,6 +309,29 @@ app.whenReady().then(() => {
               timestamp: Date.now(),
             });
           });
+          loadFileIntoViewer(newWin, cmd.fileUrl);
+          liveState = 'ready';
+          break;
+        }
+
+        case 'show_cover': {
+          if (liveEmbeddedWindow && !liveEmbeddedWindow.isDestroyed()) {
+            liveEmbeddedWindow.close();
+          }
+          const newWin = createLiveViewerWindowShell(cmd.presentationId, { emergencyExit: true });
+          liveEmbeddedWindow = newWin;
+          newWin.on('closed', () => {
+            if (liveEmbeddedWindow !== newWin) return;
+            liveEmbeddedWindow = null;
+            liveState = 'offline';
+            mainWindowRef?.webContents.send('podium-status', {
+              type: 'status',
+              sessionId: cmd.sessionId ?? null,
+              status: 'offline',
+              timestamp: Date.now(),
+            });
+          });
+          loadCoverIntoViewer(newWin, cmd.text ?? '');
           liveState = 'ready';
           break;
         }

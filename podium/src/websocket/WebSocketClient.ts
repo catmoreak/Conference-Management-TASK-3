@@ -269,6 +269,9 @@ export class WebSocketClient {
       case "load_presentation":
         await this.presentationController.loadPresentation(command.fileUrl, command.presentationId);
         break;
+      case "show_cover":
+        await this.presentationController.showCover(command.text, command.presentationId);
+        break;
       case "play":
         await this.presentationController.play();
         break;

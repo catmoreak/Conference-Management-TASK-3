@@ -92,6 +92,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         sortOrder: true,
         createdBy: true,
         createdAt: true,
+        itemType: true,
+        coverText: true,
         presenter: { select: { id: true, displayName: true } },
       },
     });
@@ -117,6 +119,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           uploadedBy: uploaderNameById.get(f.createdBy) ?? "Unknown",
           uploadedAt: f.createdAt,
           presenter: f.presenter,
+          itemType: f.itemType,
+          coverText: f.coverText,
         })),
       }),
       request,

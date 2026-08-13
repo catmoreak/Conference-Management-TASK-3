@@ -62,6 +62,32 @@ export function validatePodiumCommand(input: unknown): PodiumCommand | null {
       };
     }
 
+    case "show_cover": {
+      const missingFields: string[] = [];
+
+      if (!isNonEmptyString(candidate.sessionId)) {
+        missingFields.push("sessionId");
+      }
+      if (!isNonEmptyString(candidate.presentationId)) {
+        missingFields.push("presentationId");
+      }
+      if (!isNonEmptyString(candidate.text)) {
+        missingFields.push("text");
+      }
+
+      if (missingFields.length > 0) {
+        warnInvalidPayload(commandType, missingFields);
+        return null;
+      }
+
+      return {
+        type: "show_cover",
+        sessionId: candidate.sessionId as string,
+        presentationId: candidate.presentationId as string,
+        text: candidate.text as string,
+      };
+    }
+
     case "play": {
       const missingFields: string[] = [];
 

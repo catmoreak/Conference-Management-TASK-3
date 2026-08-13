@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { CheckCircle2, AlertTriangle, XCircle, LogIn, Power, ShieldCheck, Upload, Cast } from "lucide-react";
+import { CheckCircle2, AlertTriangle, XCircle, LogIn, Power, ShieldCheck, Upload, Cast, Zap, FileStack } from "lucide-react";
 
 import { authClient, getAuthErrorMessage, getDisplayRole, mainPanelAuthUrl } from "./lib/auth";
 import { translations, LANG_STORAGE_KEY } from "./lib/i18n";
@@ -53,6 +53,8 @@ export default function App() {
   const [sessionFilesLoading, setSessionFilesLoading] = useState(false);
   const [renamingFileId, setRenamingFileId] = useState(null);
   const [renameValue, setRenameValue] = useState("");
+  const [coverText, setCoverText] = useState("");
+  const [addingCover, setAddingCover] = useState(false);
 
   const user = session.data?.user ?? null;
   const t = translations[lang];
@@ -338,6 +340,30 @@ export default function App() {
     }
   };
 
+  const handleAddSessionCover = async () => {
+    if (!coverText.trim() || !displaySessionId) return;
+    setAddingCover(true);
+    try {
+      const response = await fetch(`${mainPanelAuthUrl}/api/live-sessions/${displaySessionId}/files/cover`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ coverText: coverText.trim() }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setNotificationMessage("error", payload.error || "Failed to add cover slide.");
+        return;
+      }
+      setCoverText("");
+      fetchSessionFiles();
+    } catch (coverError) {
+      setNotificationMessage("error", getAuthErrorMessage(coverError, "Failed to add cover slide."));
+    } finally {
+      setAddingCover(false);
+    }
+  };
+
   const handleSessionFileDelete = async (fileId) => {
     if (!window.confirm("Delete this file? This cannot be undone.")) return;
     try {
@@ -356,14 +382,16 @@ export default function App() {
     }
   };
 
-  const handleSessionFileRenameSubmit = async (fileId) => {
+  const handleSessionFileRenameSubmit = async (file) => {
     if (!renameValue.trim()) return;
     try {
-      const response = await fetch(`${mainPanelAuthUrl}/api/live-sessions/${displaySessionId}/files/${fileId}`, {
+      const response = await fetch(`${mainPanelAuthUrl}/api/live-sessions/${displaySessionId}/files/${file.id}`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName: renameValue.trim() }),
+        body: JSON.stringify(
+          file.itemType === "cover" ? { coverText: renameValue.trim() } : { fileName: renameValue.trim() },
+        ),
       });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
@@ -544,12 +572,14 @@ export default function App() {
         <div className="login-layout">
           <section className="hero-panel">
             <div className="hero-top">
-              <div className="brand-block">
-                <div className="podium-badge">
-                  <ShieldCheck size={16} />
-                  EventHQ
-                </div>
-                <p className="hero-brand-sub">{t.brandSub}</p>
+              <div className="podium-badge">
+                <span className="podium-badge-icon">
+                  <Zap size={18} fill="currentColor" />
+                </span>
+                <span className="podium-badge-text">
+                  <span className="podium-badge-title">EventHQ</span>
+                  <span className="podium-badge-sub">{t.brandSub}</span>
+                </span>
               </div>
               <div className="lang-chip">
                 <span
@@ -582,64 +612,65 @@ export default function App() {
           </section>
 
           <section className="login-panel">
-            <div className="podium-auth-header">
-              <h1 className="podium-title">{t.welcomeBack}</h1>
-
-            </div>
-
-            {error ? (
-              <div className="podium-alert" role="alert" aria-live="assertive">
-                {error}
+            <div className="login-card">
+              <div className="podium-auth-header">
+                <h1 className="podium-title">{t.welcomeBack}</h1>
               </div>
-            ) : (
-              <div className="podium-status-copy">{statusText(statusKey)}</div>
-            )}
 
-            {!isMfaStep ? (
-              <form className="auth-form" onSubmit={handleSignIn}>
-                <AuthField
-                  label={t.email}
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder={t.emailPlaceholder}
-                  autoComplete="email"
-                  disabled={loading}
-                />
-                <AuthField
-                  label={t.password}
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder={t.passwordPlaceholder}
-                  autoComplete="current-password"
-                  disabled={loading}
-                />
-                <button className="auth-button" type="submit" disabled={loading}>
-                  <LogIn size={16} />
-                  {loading ? t.signingIn : t.login}
-                </button>
-              </form>
-            ) : (
-              <form className="auth-form" onSubmit={handleVerifyTotp}>
-                <AuthField
-                  label={t.verificationCode}
-                  id="mfaCode"
-                  type="text"
-                  value={mfaCode}
-                  onChange={(event) => setMfaCode(event.target.value)}
-                  placeholder={t.codePlaceholder}
-                  autoComplete="one-time-code"
-                  disabled={loading}
-                />
-                <button className="auth-button" type="submit" disabled={loading}>
-                  <ShieldCheck size={16} />
-                  {loading ? t.verifying : t.verifyCode}
-                </button>
-              </form>
-            )}
+              {error ? (
+                <div className="podium-alert" role="alert" aria-live="assertive">
+                  {error}
+                </div>
+              ) : (
+                <div className="podium-status-copy">{statusText(statusKey)}</div>
+              )}
+
+              {!isMfaStep ? (
+                <form className="auth-form" onSubmit={handleSignIn}>
+                  <AuthField
+                    label={t.email}
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder={t.emailPlaceholder}
+                    autoComplete="email"
+                    disabled={loading}
+                  />
+                  <AuthField
+                    label={t.password}
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder={t.passwordPlaceholder}
+                    autoComplete="current-password"
+                    disabled={loading}
+                  />
+                  <button className="auth-button" type="submit" disabled={loading}>
+                    <LogIn size={16} />
+                    {loading ? t.signingIn : t.login}
+                  </button>
+                </form>
+              ) : (
+                <form className="auth-form" onSubmit={handleVerifyTotp}>
+                  <AuthField
+                    label={t.verificationCode}
+                    id="mfaCode"
+                    type="text"
+                    value={mfaCode}
+                    onChange={(event) => setMfaCode(event.target.value)}
+                    placeholder={t.codePlaceholder}
+                    autoComplete="one-time-code"
+                    disabled={loading}
+                  />
+                  <button className="auth-button" type="submit" disabled={loading}>
+                    <ShieldCheck size={16} />
+                    {loading ? t.verifying : t.verifyCode}
+                  </button>
+                </form>
+              )}
+            </div>
           </section>
         </div>
       </div>
@@ -656,25 +687,67 @@ export default function App() {
       ) : null}
       <div className="dashboard-layout">
         <header className="dashboard-header">
-          <div>
-            <div className="podium-badge">
-              <ShieldCheck size={16} />
-              EventHQ
-            </div>
-            <h1 className="dashboard-title">{t.dashboard}</h1>
+          <div className="podium-badge">
+            <span className="podium-badge-icon">
+              <Zap size={16} fill="currentColor" />
+            </span>
+            <span className="podium-badge-text">
+              <span className="podium-badge-title">{t.dashboard}</span>
+              <span className="podium-badge-sub">EventHQ</span>
+            </span>
           </div>
-          <button className="auth-button secondary" type="button" onClick={handleSignOut} disabled={loading}>
-            <Power size={16} />
-            {loading ? t.signingOut : t.signOut}
-          </button>
+          <div className="dashboard-header-right">
+            <div className="lang-chip" style={{ borderColor: "var(--border-soft)", background: "var(--bg-page)" }}>
+              <span
+                className={lang === "en" ? "active" : ""}
+                role="button"
+                tabIndex={0}
+                style={{ cursor: "pointer", color: lang === "en" ? undefined : "var(--text-muted)" }}
+                onClick={() => setLang("en")}
+              >
+                EN
+              </span>
+              <span
+                className={lang === "ja" ? "active" : ""}
+                role="button"
+                tabIndex={0}
+                style={{ cursor: "pointer", color: lang === "ja" ? undefined : "var(--text-muted)" }}
+                onClick={() => setLang("ja")}
+              >
+                JP
+              </span>
+            </div>
+            <div className="user-chip">
+              <span className="user-avatar">{(user.name || user.email || "?").slice(0, 1)}</span>
+              <span className="user-chip-text">
+                <span className="user-chip-email">{user.name || user.email}</span>
+                <span className="user-chip-role">{getDisplayRole(role)}</span>
+              </span>
+            </div>
+            <button
+              className="icon-btn"
+              type="button"
+              onClick={handleSignOut}
+              disabled={loading}
+              title={loading ? t.signingOut : t.signOut}
+              aria-label={loading ? t.signingOut : t.signOut}
+            >
+              <Power size={16} />
+            </button>
+          </div>
         </header>
 
         <main className="dashboard-content">
 
           <section className="upload-panel">
             <div className="upload-header">
-              <h2><Cast size={16} style={{ display: "inline", marginRight: 6 }} />{t.connectAsDisplay}</h2>
-              <p>{t.connectAsDisplayDesc}</p>
+              <span className="upload-header-icon">
+                <Cast size={18} />
+              </span>
+              <div className="upload-header-text">
+                <h2>{t.connectAsDisplay}</h2>
+                <p>{t.connectAsDisplayDesc}</p>
+              </div>
             </div>
 
             <div className="upload-actions" style={{ flexWrap: "wrap" }}>
@@ -716,17 +789,22 @@ export default function App() {
                   {displayState === "connecting" ? t.connecting : t.connect}
                 </button>
               )}
-              <span className="upload-hint">{t.displayStatus[displayState] ?? displayState}</span>
+              <span className={`status-pill ${displayState}`}>{t.displayStatus[displayState] ?? displayState}</span>
             </div>
           </section>
 
           <section className="upload-panel">
             <div className="upload-header">
-              <h2>Session Files</h2>
-              <p>
-                Presentation files for the selected live session — shared live with the main-panel file manager.
-                {!canUploadFiles && " Your role can reorder and view/download files here."}
-              </p>
+              <span className="upload-header-icon blue">
+                <FileStack size={18} />
+              </span>
+              <div className="upload-header-text">
+                <h2>Session Files</h2>
+                <p>
+                  Presentation files for the selected live session — shared live with the main-panel file manager.
+                  {!canUploadFiles && " Your role can reorder and view/download files here."}
+                </p>
+              </div>
             </div>
 
             {!displaySessionId ? (
@@ -746,6 +824,28 @@ export default function App() {
                       />
                     </label>
                     {uploading ? <span className="upload-hint">{t.uploading}</span> : null}
+                  </div>
+                )}
+
+                {canUploadFiles && (
+                  <div className="upload-actions" style={{ marginBottom: 12, gap: 6 }}>
+                    <input
+                      type="text"
+                      value={coverText}
+                      onChange={(e) => setCoverText(e.target.value)}
+                      placeholder="Add a cover slide (e.g. event name)"
+                      disabled={addingCover}
+                      maxLength={200}
+                      style={{ flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      className="item-action-btn"
+                      disabled={addingCover || !coverText.trim()}
+                      onClick={() => void handleAddSessionCover()}
+                    >
+                      {addingCover ? "Adding…" : "Add cover"}
+                    </button>
                   </div>
                 )}
 
@@ -786,7 +886,7 @@ export default function App() {
                               <button
                                 type="button"
                                 className="item-action-btn"
-                                onClick={() => void handleSessionFileRenameSubmit(item.id)}
+                                onClick={() => void handleSessionFileRenameSubmit(item)}
                               >
                                 Save
                               </button>
@@ -794,6 +894,8 @@ export default function App() {
                                 Cancel
                               </button>
                             </>
+                          ) : item.itemType === "cover" ? (
+                            <span className="upload-item-name">🖼 Cover: {item.coverText ?? "Untitled"}</span>
                           ) : (
                             <span className="upload-item-name">{item.fileName ?? "Untitled"}</span>
                           )}
@@ -823,7 +925,7 @@ export default function App() {
                                 className="item-action-btn"
                                 onClick={() => {
                                   setRenamingFileId(item.id);
-                                  setRenameValue(item.fileName ?? "");
+                                  setRenameValue((item.itemType === "cover" ? item.coverText : item.fileName) ?? "");
                                 }}
                               >
                                 Rename
@@ -841,7 +943,7 @@ export default function App() {
                           </span>
                         </span>
                         <span>
-                          {formatBytes(item.fileSize ?? 0)} · uploaded by {item.uploadedBy}
+                          {item.itemType === "cover" ? "Cover slide" : formatBytes(item.fileSize ?? 0)} · uploaded by {item.uploadedBy}
                         </span>
                       </li>
                     ))}
@@ -853,8 +955,13 @@ export default function App() {
 
           <section className="upload-panel">
             <div className="upload-header">
-              <h2>{t.uploadMaterials}</h2>
-              <p>{t.uploadMaterialsDesc}</p>
+              <span className="upload-header-icon violet">
+                <Upload size={18} />
+              </span>
+              <div className="upload-header-text">
+                <h2>{t.uploadMaterials}</h2>
+                <p>{t.uploadMaterialsDesc}</p>
+              </div>
             </div>
 
             <label className="file-picker">

@@ -19,6 +19,27 @@ export type PodiumCommand =
     }
   | {
       /**
+       * Command used to display a plain-text interstitial "cover" slide
+       * (e.g. the event name) instead of a real presentation file --
+       * fills the screen during the gap between two presentations.
+       */
+      readonly type: "show_cover";
+      /**
+       * The presentation session that the command targets.
+       */
+      readonly sessionId: string;
+      /**
+       * Identifier of the cover item being shown (a Submission row with
+       * itemType "cover").
+       */
+      readonly presentationId: string;
+      /**
+       * The free text to render on the cover screen.
+       */
+      readonly text: string;
+    }
+  | {
+      /**
        * Command used to start playback.
        */
       readonly type: "play";

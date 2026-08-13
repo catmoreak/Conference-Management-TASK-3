@@ -13,9 +13,14 @@ import { buildAllowedOrigins, getOriginFromUrl, withCorsHeaders } from "~/server
 
 const allowedOrigins = buildAllowedOrigins(env.PODIUM_APP_URL, env.BETTER_AUTH_URL);
 
-const renameSchema = z.object({
-  fileName: z.string().trim().min(1).max(255),
-});
+const renameSchema = z
+  .object({
+    fileName: z.string().trim().min(1).max(255).optional(),
+    coverText: z.string().trim().min(1).max(200).optional(),
+  })
+  .refine((data) => (data.fileName != null) !== (data.coverText != null), {
+    message: "Provide exactly one of fileName or coverText",
+  });
 
 export async function OPTIONS(request: Request): Promise<Response> {
   const origin = request.headers.get("origin");
@@ -75,7 +80,7 @@ export async function PATCH(
     assertPermissions(user.role as string | undefined, "material:rename");
 
     const { id, fileId } = await params;
-    await loadFileWithTenantCheck(id, fileId, session);
+    const existing = await loadFileWithTenantCheck(id, fileId, session);
 
     const body: unknown = await request.json();
     const parsed = renameSchema.safeParse(body);
@@ -87,25 +92,34 @@ export async function PATCH(
       );
     }
 
+    const isCover = existing.itemType === "cover";
+    if (isCover !== (parsed.data.coverText != null)) {
+      return withCorsHeaders(
+        NextResponse.json({ error: isCover ? "This item is a cover slide; provide coverText" : "This item is a file; provide fileName" }, { status: 400 }),
+        request,
+        allowedOrigins,
+      );
+    }
+
     const updated = await db.submission.update({
       where: { id: fileId },
-      data: { fileName: parsed.data.fileName },
+      data: isCover ? { coverText: parsed.data.coverText } : { fileName: parsed.data.fileName },
     });
 
     const reqHeaders = await headers();
     await writeAuditLog({
       actor_id: session.user.id,
-      action: "SESSION_FILE_RENAME",
+      action: isCover ? "SESSION_COVER_RENAME" : "SESSION_FILE_RENAME",
       target_type: "submission",
       target_id: fileId,
       ip: extractIp(reqHeaders),
       user_agent: extractUserAgent(reqHeaders),
       result: "success",
-      metadata: { newFileName: parsed.data.fileName },
+      metadata: isCover ? { newCoverText: parsed.data.coverText } : { newFileName: parsed.data.fileName },
     });
 
     return withCorsHeaders(
-      NextResponse.json({ success: true, file: { id: updated.id, fileName: updated.fileName } }),
+      NextResponse.json({ success: true, file: { id: updated.id, fileName: updated.fileName, coverText: updated.coverText } }),
       request,
       allowedOrigins,
     );
