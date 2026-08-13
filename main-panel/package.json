@@ -19,6 +19,7 @@
     "preview": "next build && next start",
     "start": "next start",
     "seed:admin": "tsx scripts/seed-admin.ts",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "ws:dev": "tsx scripts/ws-server.ts",
     "ws:start": "tsx scripts/ws-server.ts"
@@ -59,7 +60,8 @@
     "prisma": "^6.6.0",
     "tailwindcss": "^4.0.15",
     "typescript": "^5.8.2",
-    "typescript-eslint": "^8.27.0"
+    "typescript-eslint": "^8.27.0",
+    "vitest": "^3.2.4"
   },
   "ct3aMetadata": {
     "initVersion": "7.40.0"

@@ -5,16 +5,46 @@
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, createPermissionProcedure } from "~/server/api/trpc";
+import { authedProcedure, createTRPCRouter } from "~/server/api/trpc";
 import { assertTenantAccess } from "~/server/auth/tenant";
+import { assertCanManageCoreData, ensureUniqueRoomName } from "~/server/core-data";
 
-const viewProcedure = createPermissionProcedure("event:view");
-const editProcedure = createPermissionProcedure("event:edit");
+async function assertRoomReadAccess(
+  ctx: { db: typeof import("~/server/db").db; session: { user: Record<string, unknown> } },
+  eventId: string,
+) {
+  const role = (ctx.session.user.role as string | undefined) ?? undefined;
+  if (role !== "presenter") return;
 
-/** Helper: load room + event, assert tenant access, return both. */
+  const userId = String((ctx.session.user.id as string | undefined) ?? "");
+  if (!userId) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Presenter access requires an authenticated user.",
+    });
+  }
+
+  const isAssigned = await ctx.db.liveSession.findFirst({
+    where: {
+      eventId,
+      deletedAt: null,
+      presentationAssignments: {
+        some: { presenter: { userId } },
+      },
+    },
+  });
+
+  if (!isAssigned) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Presenter access is limited to events where you are assigned to a session.",
+    });
+  }
+}
+
 async function loadRoomWithTenantCheck(
-  db: Parameters<Parameters<typeof viewProcedure["query"]>[0]>[0]["ctx"]["db"],
-  session: Parameters<Parameters<typeof viewProcedure["query"]>[0]>[0]["ctx"]["session"],
+  db: typeof import("~/server/db").db,
+  session: { user: Record<string, unknown> },
   roomId: string,
 ) {
   const room = await db.room.findUnique({
@@ -27,13 +57,14 @@ async function loadRoomWithTenantCheck(
 }
 
 export const roomRouter = createTRPCRouter({
-  /** List rooms for a given event. */
-  listByEvent: viewProcedure
+  listByEvent: authedProcedure
     .input(z.object({ eventId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const event = await ctx.db.event.findUnique({ where: { id: input.eventId } });
-      if (!event) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!event) throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
       assertTenantAccess(ctx.session, event.tenantId, true);
+      await assertRoomReadAccess(ctx, input.eventId);
+
       return ctx.db.room.findMany({
         where: { eventId: input.eventId },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
@@ -41,61 +72,91 @@ export const roomRouter = createTRPCRouter({
       });
     }),
 
-  /** Get a single room. */
-  getById: viewProcedure
+  getById: authedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
-      return loadRoomWithTenantCheck(ctx.db, ctx.session, input.id);
+      const room = await loadRoomWithTenantCheck(ctx.db, ctx.session, input.id);
+      await assertRoomReadAccess(ctx, room.eventId);
+      return room;
     }),
 
-  /** Create a room within an event. */
-  create: editProcedure
+  create: authedProcedure
     .input(
       z.object({
         eventId: z.string().uuid(),
-        name: z.string().min(1).max(200),
-        capacity: z.number().int().positive().optional(),
-        location: z.string().max(300).optional(),
+        name: z.string().trim().min(1).max(200),
+        capacity: z.number().int().positive().nullable().optional(),
+        location: z.string().trim().max(300).nullable().optional(),
+        equipmentNotes: z.string().trim().max(2000).nullable().optional(),
+        status: z.enum(["active", "inactive"]).default("active"),
         sortOrder: z.number().int().min(0).default(0),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const role = (ctx.session.user.role as string | undefined) ?? undefined;
+      assertCanManageCoreData(role);
+
       const event = await ctx.db.event.findUnique({ where: { id: input.eventId } });
       if (!event) throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
       assertTenantAccess(ctx.session, event.tenantId, true);
+      await ensureUniqueRoomName(ctx.db, input.eventId, input.name);
+
       return ctx.db.room.create({
         data: {
           id: crypto.randomUUID(),
           eventId: input.eventId,
-          name: input.name,
-          capacity: input.capacity,
-          location: input.location,
+          name: input.name.trim(),
+          capacity: input.capacity ?? null,
+          location: input.location ?? null,
+          equipmentNotes: input.equipmentNotes ?? null,
+          status: input.status,
           sortOrder: input.sortOrder,
         },
       });
     }),
 
-  /** Update a room'\''s details. */
-  update: editProcedure
+  update: authedProcedure
     .input(
       z.object({
         id: z.string().uuid(),
-        name: z.string().min(1).max(200).optional(),
+        name: z.string().trim().min(1).max(200).optional(),
         capacity: z.number().int().positive().nullable().optional(),
-        location: z.string().max(300).nullable().optional(),
+        location: z.string().trim().max(300).nullable().optional(),
+        equipmentNotes: z.string().trim().max(2000).nullable().optional(),
+        status: z.enum(["active", "inactive"]).optional(),
         sortOrder: z.number().int().min(0).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const role = (ctx.session.user.role as string | undefined) ?? undefined;
+      assertCanManageCoreData(role);
+
       const { id, ...data } = input;
-      await loadRoomWithTenantCheck(ctx.db, ctx.session, id);
-      return ctx.db.room.update({ where: { id }, data });
+      const room = await loadRoomWithTenantCheck(ctx.db, ctx.session, id);
+      if (data.name) {
+        await ensureUniqueRoomName(ctx.db, room.eventId, data.name, room.id);
+      }
+
+      return ctx.db.room.update({
+        where: { id },
+        data: {
+          ...data,
+          name: data.name?.trim(),
+          location: data.location ?? undefined,
+          capacity: data.capacity ?? undefined,
+          equipmentNotes: data.equipmentNotes ?? undefined,
+          status: data.status ?? undefined,
+          sortOrder: data.sortOrder ?? undefined,
+        },
+      });
     }),
 
-  /** Delete a room — only if no live sessions are assigned to it. */
-  delete: editProcedure
+  delete: authedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
+      const role = (ctx.session.user.role as string | undefined) ?? undefined;
+      assertCanManageCoreData(role);
+
       const room = await loadRoomWithTenantCheck(ctx.db, ctx.session, input.id);
       const sessionCount = await ctx.db.liveSession.count({
         where: { roomId: room.id },
@@ -103,7 +164,7 @@ export const roomRouter = createTRPCRouter({
       if (sessionCount > 0) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: `Cannot delete room: ${sessionCount} session(s) are assigned to it. Reassign or delete them first.`,
+          message: `Cannot delete room: ${sessionCount} session(s) are assigned to it. Reassign or delete those sessions first.`,
         });
       }
       return ctx.db.room.delete({ where: { id: input.id } });

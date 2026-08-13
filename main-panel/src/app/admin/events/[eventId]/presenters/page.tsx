@@ -14,10 +14,10 @@ export default function PresentersPage() {
 
   const [isOpen, setIsOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [formDisplayName, setFormDisplayName] = useState("");
-  const [formOrganization, setFormOrganization] = useState("");
-  const [formTitle, setFormTitle] = useState("");
-  const [formNotes, setFormNotes] = useState("");
+  const [formName, setFormName] = useState("");
+  const [formEmail, setFormEmail] = useState("");
+  const [formBio, setFormBio] = useState("");
+  const [formStatus, setFormStatus] = useState<"active" | "inactive">("active");
   const [error, setError] = useState("");
 
   if (!user || (user.role !== "admin" && user.role !== "reviewer")) {
@@ -44,10 +44,10 @@ export default function PresentersPage() {
   function resetForm() {
     setIsOpen(false);
     setEditId(null);
-    setFormDisplayName("");
-    setFormOrganization("");
-    setFormTitle("");
-    setFormNotes("");
+    setFormName("");
+    setFormEmail("");
+    setFormBio("");
+    setFormStatus("active");
     setError("");
   }
 
@@ -58,16 +58,16 @@ export default function PresentersPage() {
 
   function openEdit(p: {
     id: string;
-    displayName: string;
-    organization: string | null;
-    title: string | null;
-    notes: string | null;
+    name: string;
+    email: string;
+    bio?: string | null;
+    status: string;
   }) {
     setEditId(p.id);
-    setFormDisplayName(p.displayName);
-    setFormOrganization(p.organization ?? "");
-    setFormTitle(p.title ?? "");
-    setFormNotes(p.notes ?? "");
+    setFormName(p.name);
+    setFormEmail(p.email);
+    setFormBio(p.bio ?? "");
+    setFormStatus(p.status === "active" || p.status === "inactive" ? p.status : "inactive");
     setError("");
     setIsOpen(true);
   }
@@ -78,18 +78,18 @@ export default function PresentersPage() {
     if (editId) {
       updateMutation.mutate({
         id: editId,
-        displayName: formDisplayName,
-        organization: formOrganization || null,
-        title: formTitle || null,
-        notes: formNotes || null,
+        name: formName,
+        email: formEmail,
+        bio: formBio || null,
+        status: formStatus,
       });
     } else {
       createMutation.mutate({
         eventId,
-        displayName: formDisplayName,
-        organization: formOrganization || undefined,
-        title: formTitle || undefined,
-        notes: formNotes || undefined,
+        name: formName,
+        email: formEmail,
+        bio: formBio || undefined,
+        status: formStatus,
       });
     }
   }
@@ -108,7 +108,7 @@ export default function PresentersPage() {
           <div>
             <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">Presenters</h1>
             <p className="text-text-secondary text-sm mt-1">
-              {event ? `Event: ${event.name}` : "Loading..."} — no PII fields stored
+              {event ? `Event: ${event.name}` : "Loading..."}
             </p>
           </div>
           <button
@@ -132,8 +132,8 @@ export default function PresentersPage() {
               <thead>
                 <tr className="bg-white border-b border-border-soft text-text-secondary text-xs font-semibold uppercase tracking-wider">
                   <th className="px-6 py-4">Name</th>
-                  <th className="px-6 py-4">Organization</th>
-                  <th className="px-6 py-4">Title</th>
+                  <th className="px-6 py-4">Email</th>
+                  <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4">Assignments</th>
                   <th className="px-6 py-4 text-right">Actions</th>
                 </tr>
@@ -141,10 +141,10 @@ export default function PresentersPage() {
               <tbody className="divide-y divide-border-soft text-sm">
                 {(presenters ?? []).map((p) => (
                   <tr key={p.id} className="hover:bg-white transition">
-                    <td className="px-6 py-4 font-semibold text-text-primary">{p.displayName}</td>
-                    <td className="px-6 py-4 text-text-secondary">{p.organization ?? "—"}</td>
-                    <td className="px-6 py-4 text-text-secondary">{p.title ?? "—"}</td>
-                    <td className="px-6 py-4 text-text-secondary">{p._count.presentationAssignments}</td>
+                    <td className="px-6 py-4 font-semibold text-text-primary">{p.name}</td>
+                    <td className="px-6 py-4 text-text-secondary">{p.email}</td>
+                    <td className="px-6 py-4 text-text-secondary">{p.status}</td>
+                    <td className="px-6 py-4 text-text-secondary">{p._count?.presentationAssignments ?? 0}</td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2">
                         <button
@@ -155,7 +155,7 @@ export default function PresentersPage() {
                         </button>
                         <button
                           onClick={() => {
-                            if (confirm(`Remove presenter "${p.displayName}"? Unassign from all sessions first.`)) {
+                            if (confirm(`Remove presenter "${p.name}"? Unassign from all sessions first.`)) {
                               deleteMutation.mutate({ id: p.id });
                             }
                           }}
@@ -182,30 +182,32 @@ export default function PresentersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-text-primary/40 backdrop-blur-sm" role="dialog" aria-modal="true">
           <div className="bg-bg-secondary border border-border-soft w-full max-w-md rounded-xl p-6 shadow-hard-lg">
             <h2 className="text-xl font-bold text-text-primary mb-1">{editId ? "Edit Presenter" : "Add Presenter"}</h2>
-            <p className="text-xs text-text-muted mb-6">No email or phone fields — PII excluded per FR-EVT-003</p>
+            <p className="text-xs text-text-muted mb-6">Keep presenter identity and event contact data aligned with each session.</p>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="pres-name">Display Name</label>
-                <input id="pres-name" type="text" required value={formDisplayName}
-                  onChange={(e) => setFormDisplayName(e.target.value)}
+                <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="pres-name">Name</label>
+                <input id="pres-name" type="text" required value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
                   className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="pres-org">Organization</label>
-                <input id="pres-org" type="text" value={formOrganization}
-                  onChange={(e) => setFormOrganization(e.target.value)} placeholder="Optional"
-                  className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none placeholder:text-text-muted" />
+                <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="pres-email">Email</label>
+                <input id="pres-email" type="email" required value={formEmail}
+                  onChange={(e) => setFormEmail(e.target.value)}
+                  className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="pres-title">Title / Role</label>
-                <input id="pres-title" type="text" value={formTitle}
-                  onChange={(e) => setFormTitle(e.target.value)} placeholder="Optional"
-                  className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none placeholder:text-text-muted" />
+                <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="pres-status">Status</label>
+                <select id="pres-status" value={formStatus} onChange={(e) => setFormStatus(e.target.value as "active" | "inactive")}
+                  className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none">
+                  <option value="active">active</option>
+                  <option value="inactive">inactive</option>
+                </select>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="pres-notes">Internal Notes</label>
-                <textarea id="pres-notes" rows={2} value={formNotes}
-                  onChange={(e) => setFormNotes(e.target.value)} placeholder="Staff-only notes (not shown to presenter)"
+                <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="pres-bio">Bio</label>
+                <textarea id="pres-bio" rows={2} value={formBio}
+                  onChange={(e) => setFormBio(e.target.value)} placeholder="Optional bio"
                   className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none placeholder:text-text-muted" />
               </div>
               {error && <p className="text-error text-xs">{error}</p>}

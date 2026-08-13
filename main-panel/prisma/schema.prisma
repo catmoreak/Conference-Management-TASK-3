@@ -38,6 +38,7 @@ model User {
   sessions      Session[]
   accounts      Account[]
   posts         Post[]
+  presenters    Presenter[]
 
   // Extended fields
   role              Role        @default(reviewer)
@@ -273,18 +274,21 @@ model Event {
 // stored here — derived via room.event.tenantId in resolvers, same
 // convention as LiveSession/Submission.
 model Room {
-  id        String   @id @default(uuid())
-  eventId   String   @map("event_id")
-  event     Event    @relation(fields: [eventId], references: [id])
-  name      String
-  capacity  Int?
-  location  String?
-  sortOrder Int      @default(0) @map("sort_order")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id              String   @id @default(uuid())
+  eventId         String   @map("event_id")
+  event           Event    @relation(fields: [eventId], references: [id])
+  name            String
+  capacity        Int?
+  location        String?
+  equipmentNotes  String?  @map("equipment_notes")
+  status          String   @default("active")
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   liveSessions LiveSession[]
 
+  @@unique([eventId, name], map: "rooms_event_id_name_uniq")
   @@index([eventId], map: "rooms_event_id_idx")
   @@map("rooms")
 }
@@ -335,7 +339,13 @@ model Presenter {
   id           String   @id @default(uuid())
   eventId      String   @map("event_id")
   event        Event    @relation(fields: [eventId], references: [id])
-  displayName  String   @map("display_name")
+  userId       String?  @map("user_id")
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name         String
+  email        String
+  bio          String?
+  status       String   @default("active")
+  displayName  String?  @map("display_name")
   organization String?
   title        String?
   notes        String?
@@ -345,7 +355,9 @@ model Presenter {
   presentationAssignments PresentationAssignment[]
   submissions             Submission[]
 
+  @@unique([eventId, email], map: "presenters_event_id_email_uniq")
   @@index([eventId], map: "presenters_event_id_idx")
+  @@index([userId], map: "presenters_user_id_idx")
   @@map("presenters")
 }
 
