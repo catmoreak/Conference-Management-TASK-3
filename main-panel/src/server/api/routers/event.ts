@@ -67,6 +67,28 @@ export const eventRouter = createTRPCRouter({
       return event;
     }),
 
+  /** Return computed room/session/presenter counts for an event. */
+  getCounts: viewProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const event = await ctx.db.event.findUnique({ where: { id: input.id } });
+      if (!event) throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
+      assertTenantAccess(ctx.session, event.tenantId, true);
+
+      const [roomCount, sessionCount, presenterCount] = await Promise.all([
+        ctx.db.room.count({ where: { eventId: input.id } }),
+        ctx.db.liveSession.count({ where: { eventId: input.id, deletedAt: null } }),
+        ctx.db.presenter.count({ where: { eventId: input.id } }),
+      ]);
+
+      return {
+        eventId: input.id,
+        room_count: roomCount,
+        session_count: sessionCount,
+        presenter_count: presenterCount,
+      };
+    }),
+
   /** Create event under the calling user'\''s tenant. Admin can specify tenantId. */
   create: createProcedure
     .input(

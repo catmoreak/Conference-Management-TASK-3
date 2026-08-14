@@ -1,19 +1,55 @@
 ﻿/**
  * tRPC router: Presenter management.
- * No PII fields (email/phone excluded per FR-EVT-003).
- * Presenters are fully decoupled from User accounts.
+ * Presenters are event-scoped records that can optionally link to a User.
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, createPermissionProcedure } from "~/server/api/trpc";
+import { authedProcedure, createTRPCRouter } from "~/server/api/trpc";
 import { assertTenantAccess } from "~/server/auth/tenant";
+import { assertCanManageCoreData, ensureUniquePresenterEmail } from "~/server/core-data";
 
-const viewProcedure = createPermissionProcedure("event:view");
-const editProcedure = createPermissionProcedure("event:edit");
+async function assertPresenterReadAccess(
+  ctx: { db: typeof import("~/server/db").db; session: { user: Record<string, unknown> } },
+  eventId: string,
+) {
+  const role = (ctx.session.user.role as string | undefined) ?? undefined;
+  if (role !== "presenter") return;
+
+  const userId = String((ctx.session.user.id as string | undefined) ?? "");
+  if (!userId) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Presenter access requires an authenticated user.",
+    });
+  }
+
+  const hasPresenterRecord = await ctx.db.presenter.findFirst({
+    where: { eventId, userId },
+  });
+
+  if (hasPresenterRecord) return;
+
+  const isAssigned = await ctx.db.liveSession.findFirst({
+    where: {
+      eventId,
+      deletedAt: null,
+      presentationAssignments: {
+        some: { presenter: { userId } },
+      },
+    },
+  });
+
+  if (!isAssigned) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Presenter access is limited to events where you are assigned to a session.",
+    });
+  }
+}
 
 async function loadPresenterWithTenantCheck(
-  db: Parameters<Parameters<typeof viewProcedure["query"]>[0]>[0]["ctx"]["db"],
-  session: Parameters<Parameters<typeof viewProcedure["query"]>[0]>[0]["ctx"]["session"],
+  db: typeof import("~/server/db").db,
+  session: { user: Record<string, unknown> },
   presenterId: string,
 ) {
   const presenter = await db.presenter.findUnique({
@@ -26,24 +62,29 @@ async function loadPresenterWithTenantCheck(
 }
 
 export const presenterRouter = createTRPCRouter({
-  /** List presenters for a given event. */
-  listByEvent: viewProcedure
+  listByEvent: authedProcedure
     .input(z.object({ eventId: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const event = await ctx.db.event.findUnique({ where: { id: input.eventId } });
-      if (!event) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!event) throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
       assertTenantAccess(ctx.session, event.tenantId, true);
-      return ctx.db.presenter.findMany({
+      await assertPresenterReadAccess(ctx, input.eventId);
+
+      const presenters = await ctx.db.presenter.findMany({
         where: { eventId: input.eventId },
-        orderBy: { displayName: "asc" },
+        orderBy: [{ name: "asc" }, { createdAt: "asc" }],
         include: {
           _count: { select: { presentationAssignments: true } },
         },
       });
+
+      return presenters.map((presenter) => ({
+        ...presenter,
+        displayName: presenter.displayName ?? presenter.name,
+      }));
     }),
 
-  /** Get a single presenter with their session assignments. */
-  getById: viewProcedure
+  getById: authedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const presenter = await ctx.db.presenter.findUnique({
@@ -58,61 +99,133 @@ export const presenterRouter = createTRPCRouter({
       });
       if (!presenter) throw new TRPCError({ code: "NOT_FOUND" });
       assertTenantAccess(ctx.session, presenter.event.tenantId, true);
-      return presenter;
+      await assertPresenterReadAccess(ctx, presenter.eventId);
+
+      return {
+        ...presenter,
+        displayName: presenter.displayName ?? presenter.name,
+      };
     }),
 
-  /** Add a presenter to an event. */
-  create: editProcedure
+  create: authedProcedure
     .input(
       z.object({
         eventId: z.string().uuid(),
-        displayName: z.string().min(1).max(200),
-        organization: z.string().max(200).optional(),
-        title: z.string().max(200).optional(),
-        notes: z.string().max(2000).optional(),
+        userId: z.string().uuid().nullable().optional(),
+        name: z.string().trim().min(1).max(200).optional(),
+        displayName: z.string().trim().min(1).max(200).optional(),
+        email: z.string().trim().email().optional(),
+        bio: z.string().trim().max(2000).nullable().optional(),
+        status: z.enum(["active", "inactive"]).default("active"),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const role = (ctx.session.user.role as string | undefined) ?? undefined;
+      assertCanManageCoreData(role);
+
       const event = await ctx.db.event.findUnique({ where: { id: input.eventId } });
       if (!event) throw new TRPCError({ code: "NOT_FOUND", message: "Event not found" });
       assertTenantAccess(ctx.session, event.tenantId, true);
-      return ctx.db.presenter.create({
+
+      const presenterName = (input.name ?? input.displayName ?? "").trim();
+      const presenterEmail = (input.email ?? "").trim();
+      if (!presenterName || !presenterEmail) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Presenter name and email are required.",
+        });
+      }
+
+      await ensureUniquePresenterEmail(ctx.db, input.eventId, presenterEmail);
+      if (input.userId) {
+        const user = await ctx.db.user.findUnique({ where: { id: input.userId } });
+        if (!user) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "User not found" });
+        }
+      }
+
+      const presenter = await ctx.db.presenter.create({
         data: {
           id: crypto.randomUUID(),
           eventId: input.eventId,
-          displayName: input.displayName,
-          organization: input.organization,
-          title: input.title,
-          notes: input.notes,
+          userId: input.userId ?? null,
+          name: presenterName,
+          displayName: presenterName,
+          email: presenterEmail,
+          bio: input.bio ?? null,
+          status: input.status,
         },
       });
+
+      return {
+        ...presenter,
+        displayName: presenter.displayName ?? presenter.name,
+      };
     }),
 
-  /** Update presenter display information. No PII fields accepted. */
-  update: editProcedure
+  update: authedProcedure
     .input(
       z.object({
         id: z.string().uuid(),
-        displayName: z.string().min(1).max(200).optional(),
-        organization: z.string().max(200).nullable().optional(),
-        title: z.string().max(200).nullable().optional(),
-        notes: z.string().max(2000).nullable().optional(),
+        userId: z.string().uuid().nullable().optional(),
+        name: z.string().trim().min(1).max(200).optional(),
+        displayName: z.string().trim().min(1).max(200).optional(),
+        email: z.string().trim().email().optional(),
+        bio: z.string().trim().max(2000).nullable().optional(),
+        status: z.enum(["active", "inactive"]).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const role = (ctx.session.user.role as string | undefined) ?? undefined;
+      assertCanManageCoreData(role);
+
       const { id, ...data } = input;
-      await loadPresenterWithTenantCheck(ctx.db, ctx.session, id);
-      return ctx.db.presenter.update({ where: { id }, data });
+      const presenter = await loadPresenterWithTenantCheck(ctx.db, ctx.session, id);
+      const nextName = (data.name ?? data.displayName ?? presenter.name).trim();
+      const nextEmail = (data.email ?? presenter.email).trim();
+
+      if (!nextName || !nextEmail) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Presenter name and email are required.",
+        });
+      }
+
+      if (data.email || data.name || data.displayName) {
+        await ensureUniquePresenterEmail(ctx.db, presenter.eventId, nextEmail, presenter.id);
+      }
+      if (data.userId !== undefined && data.userId !== null) {
+        const user = await ctx.db.user.findUnique({ where: { id: data.userId } });
+        if (!user) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "User not found" });
+        }
+      }
+
+      const updated = await ctx.db.presenter.update({
+        where: { id },
+        data: {
+          ...data,
+          name: nextName,
+          displayName: nextName,
+          email: nextEmail,
+          bio: data.bio ?? undefined,
+          userId: data.userId ?? undefined,
+          status: data.status ?? undefined,
+        },
+      });
+
+      return {
+        ...updated,
+        displayName: updated.displayName ?? updated.name,
+      };
     }),
 
-  /**
-   * Remove a presenter from an event.
-   * Cascades presentation assignments (handled by DB: DELETE RESTRICT on
-   * assignment FK — callers must unassign first).
-   */
-  delete: editProcedure
+  delete: authedProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
+      const role = (ctx.session.user.role as string | undefined) ?? undefined;
+      assertCanManageCoreData(role);
+
       await loadPresenterWithTenantCheck(ctx.db, ctx.session, input.id);
       const assignmentCount = await ctx.db.presentationAssignment.count({
         where: { presenterId: input.id },
@@ -120,7 +233,7 @@ export const presenterRouter = createTRPCRouter({
       if (assignmentCount > 0) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: `Cannot delete presenter: ${assignmentCount} session assignment(s) exist. Remove them first via presentationAssignment.unassign.`,
+          message: `Cannot delete presenter: ${assignmentCount} session assignment(s) still exist. Remove those assignments before deleting the presenter.`,
         });
       }
       return ctx.db.presenter.delete({ where: { id: input.id } });
