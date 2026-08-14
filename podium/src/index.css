@@ -512,20 +512,33 @@ body {
   margin-top: 16px;
 }
 
-.file-picker input {
+.file-dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   width: 100%;
   border: 1.5px dashed var(--border-soft);
   border-radius: var(--radius-lg);
-  padding: 14px;
+  padding: 14px 18px;
   background: var(--bg-page);
   color: var(--text-secondary);
   font-size: 0.88rem;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  user-select: none;
 }
 
-.file-picker input:hover {
+.file-dropzone:hover:not(.disabled) {
   border-color: var(--accent-emerald);
   background: var(--accent-emerald-tint);
+  color: #047857;
+}
+
+.file-dropzone.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .upload-actions {

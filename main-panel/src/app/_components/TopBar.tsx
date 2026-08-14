@@ -2,24 +2,28 @@
 
 import { useAuth } from "~/app/_components/AuthProvider";
 import { usePathname } from "next/navigation";
+import { useLanguage } from "~/app/_components/LanguageContext";
 
 export function TopBar() {
   const { user } = useAuth();
   const pathname = usePathname();
+  const { lang, setLang, t } = useLanguage();
 
   if (!user) return null;
 
   // Derive dynamic page title based on pathname
   const getPageTitle = () => {
-    if (pathname.includes("/admin/accounts")) return "Account Management";
-    if (pathname.includes("/admin/sessions")) return "Active Sessions";
-    if (pathname.includes("/admin/clients")) return "Client Management";
-    if (pathname.includes("/admin/events")) return "Event Management";
-    if (pathname.includes("/audit-logs")) return "Audit Logs";
-    if (pathname.includes("/dashboard/files")) return "File Manager";
-    if (pathname.includes("/dashboard/staff")) return "Staff Dashboard";
-    if (pathname.includes("/dashboard/pres-ops")) return "Presentation Operations";
-    return "Dashboard";
+    if (pathname.includes("/admin/accounts")) return t.pageTitles.accounts;
+    if (pathname.includes("/admin/sessions")) return t.pageTitles.activeSessions;
+    if (pathname.includes("/admin/clients")) return t.pageTitles.clients;
+    if (pathname.includes("/admin/events")) return t.pageTitles.events;
+    if (pathname.includes("/audit-logs")) return t.pageTitles.auditLogs;
+    if (pathname.includes("/dashboard/files")) return t.pageTitles.files;
+    if (pathname.includes("/dashboard/staff")) return t.pageTitles.staff;
+    if (pathname.includes("/dashboard/pres-ops")) return t.pageTitles.presOps;
+    if (pathname.includes("/checkin")) return t.pageTitles.checkin;
+    if (pathname.includes("/podium")) return t.pageTitles.podium;
+    return t.pageTitles.dashboard;
   };
 
   const firstLetter = user.name ? user.name.charAt(0).toUpperCase() : "U";
@@ -35,8 +39,28 @@ export function TopBar() {
       <div className="flex items-center gap-4">
         {/* EN/JP Toggle */}
         <div className="inline-flex border border-gray-200 rounded-lg p-0.5 bg-gray-50 text-xs">
-          <span className="px-2 py-0.5 rounded bg-white border border-gray-100 shadow-sm text-text-primary font-bold">EN</span>
-          <span className="px-2 py-0.5 rounded text-text-secondary font-medium cursor-pointer hover:text-text-primary">JP</span>
+          <button
+            type="button"
+            onClick={() => setLang("en")}
+            className={`px-2.5 py-1 rounded font-bold transition-colors ${
+              lang === "en"
+                ? "bg-white border border-gray-100 shadow-sm text-text-primary"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            EN
+          </button>
+          <button
+            type="button"
+            onClick={() => setLang("ja")}
+            className={`px-2.5 py-1 rounded font-bold transition-colors ${
+              lang === "ja"
+                ? "bg-white border border-gray-100 shadow-sm text-text-primary"
+                : "text-text-secondary hover:text-text-primary"
+            }`}
+          >
+            JP
+          </button>
         </div>
 
         {/* Search */}
@@ -48,7 +72,7 @@ export function TopBar() {
           </span>
           <input
             type="text"
-            placeholder="Search participants..."
+            placeholder={t.searchPlaceholder}
             className="w-full bg-gray-50 border border-gray-200 focus:border-[#0B1220] hover:border-gray-300 text-text-primary placeholder:text-text-muted rounded-lg pl-9 pr-4 py-1.5 text-xs transition outline-none focus:ring-2 focus:ring-[#0B1220]/5"
           />
         </div>
@@ -66,7 +90,7 @@ export function TopBar() {
         {/* User profile & avatar */}
         <div className="flex items-center gap-3">
           <span className="inline-block px-2.5 py-0.5 text-[10px] font-bold bg-gray-100 text-gray-700 rounded-full uppercase tracking-wider">
-            {user.role}
+            {t.roles[user.role as keyof typeof t.roles] ?? user.role}
           </span>
           <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-sm">
             {firstLetter}

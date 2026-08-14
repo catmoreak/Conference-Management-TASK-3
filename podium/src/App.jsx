@@ -376,7 +376,7 @@ export default function App() {
   };
 
   const handleSessionFileDelete = async (fileId) => {
-    if (!window.confirm("Delete this file? This cannot be undone.")) return;
+    if (!window.confirm(t.deleteConfirm)) return;
     try {
       const response = await fetch(`${mainPanelAuthUrl}/api/live-sessions/${displaySessionId}/files/${fileId}`, {
         method: "DELETE",
@@ -732,7 +732,7 @@ export default function App() {
               <span className="user-avatar">{(user.name || user.email || "?").slice(0, 1)}</span>
               <span className="user-chip-text">
                 <span className="user-chip-email">{user.name || user.email}</span>
-                <span className="user-chip-role">{getDisplayRole(role)}</span>
+                <span className="user-chip-role">{t.roles?.[role?.toLowerCase()] || getDisplayRole(role)}</span>
               </span>
             </div>
             <button
@@ -810,29 +810,33 @@ export default function App() {
                 <FileStack size={18} />
               </span>
               <div className="upload-header-text">
-                <h2>Session Files</h2>
+                <h2>{t.sessionFilesTitle}</h2>
                 <p>
-                  Presentation files for the selected live session — shared live with the main-panel file manager.
-                  {!canUploadFiles && " Your role can reorder and view/download files here."}
+                  {t.sessionFilesDesc}
+                  {!canUploadFiles && t.reorderViewRoleHint}
                 </p>
               </div>
             </div>
 
             {!displaySessionId ? (
-              <span className="upload-hint">Select a live session above to see its files.</span>
+              <span className="upload-hint">{t.selectSessionHint}</span>
             ) : sessionFilesLoading ? (
-              <span className="upload-hint">Loading files…</span>
+              <span className="upload-hint">{t.loadingFiles}</span>
             ) : (
               <>
                 {canUploadFiles && (
                   <div className="upload-actions" style={{ marginBottom: 12 }}>
-                    <label className="file-picker">
+                    <label htmlFor="session-file-input" className={`file-dropzone ${uploading ? "disabled" : ""}`}>
                       <input
+                        id="session-file-input"
                         type="file"
                         accept=".pptx,.pptm,.ppt,.pdf"
                         disabled={uploading}
                         onChange={(event) => void handleSessionFileUpload(event)}
+                        style={{ display: "none" }}
                       />
+                      <Upload size={16} />
+                      <span>{t.chooseFile}</span>
                     </label>
                     {uploading ? <span className="upload-hint">{t.uploading}</span> : null}
                   </div>
@@ -844,7 +848,7 @@ export default function App() {
                       type="text"
                       value={coverText}
                       onChange={(e) => setCoverText(e.target.value)}
-                      placeholder="Add a cover slide (e.g. event name)"
+                      placeholder={t.addCoverSlidePlaceholder}
                       disabled={addingCover}
                       maxLength={200}
                       style={{ flex: 1 }}
@@ -855,13 +859,13 @@ export default function App() {
                       disabled={addingCover || !coverText.trim()}
                       onClick={() => void handleAddSessionCover()}
                     >
-                      {addingCover ? "Adding…" : "Add cover"}
+                      {addingCover ? t.adding : t.addCover}
                     </button>
                   </div>
                 )}
 
                 {sessionFiles.length === 0 ? (
-                  <span className="upload-hint">No files uploaded for this session yet.</span>
+                  <span className="upload-hint">{t.noFilesForSession}</span>
                 ) : (
                   <ul className="upload-list">
                     {sessionFiles.map((item, index) => (
@@ -899,16 +903,16 @@ export default function App() {
                                 className="item-action-btn"
                                 onClick={() => void handleSessionFileRenameSubmit(item)}
                               >
-                                Save
+                                {t.save}
                               </button>
                               <button type="button" className="item-action-btn" onClick={() => setRenamingFileId(null)}>
-                                Cancel
+                                {t.cancel}
                               </button>
                             </>
                           ) : item.itemType === "cover" ? (
-                            <span className="upload-item-name">🖼 Cover: {item.coverText ?? "Untitled"}</span>
+                            <span className="upload-item-name">🖼 {t.cover}: {item.coverText ?? ""}</span>
                           ) : (
-                            <span className="upload-item-name">{item.fileName ?? "Untitled"}</span>
+                            <span className="upload-item-name">{item.fileName ?? ""}</span>
                           )}
                           <span className="upload-item-actions">
                             {item.publicUrl && isPowerPointFile(item.fileName ?? "") ? (
@@ -939,7 +943,7 @@ export default function App() {
                                   setRenameValue((item.itemType === "cover" ? item.coverText : item.fileName) ?? "");
                                 }}
                               >
-                                Rename
+                                {t.rename}
                               </button>
                             )}
                             {canDeleteFiles && (
@@ -948,13 +952,13 @@ export default function App() {
                                 className="item-action-btn"
                                 onClick={() => void handleSessionFileDelete(item.id)}
                               >
-                                Delete
+                                {t.delete}
                               </button>
                             )}
                           </span>
                         </span>
                         <span>
-                          {item.itemType === "cover" ? "Cover slide" : formatBytes(item.fileSize ?? 0)} · uploaded by {item.uploadedBy}
+                          {item.itemType === "cover" ? t.coverSlide : formatBytes(item.fileSize ?? 0)} · {t.uploadedBy(item.uploadedBy)}
                         </span>
                       </li>
                     ))}
@@ -975,16 +979,33 @@ export default function App() {
               </div>
             </div>
 
-            <label className="file-picker">
+            <label
+              htmlFor="materials-file-input"
+              className={`file-dropzone ${uploading ? "disabled" : ""}`}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (uploading) return;
+                const files = Array.from(e.dataTransfer.files ?? []);
+                if (files.length > 0) {
+                  setSelectedFiles(files);
+                }
+              }}
+            >
               <input
+                id="materials-file-input"
                 type="file"
                 multiple
+                accept=".pptx,.pptm,.ppt,.pdf"
                 onChange={(event) => {
                   const files = Array.from(event.target.files ?? []);
                   setSelectedFiles(files);
                 }}
                 disabled={uploading}
+                style={{ display: "none" }}
               />
+              <Upload size={18} />
+              <span>{selectedFiles.length > 0 ? t.filesSelected(selectedFiles.length) : t.chooseFiles}</span>
             </label>
 
             <div className="upload-actions">

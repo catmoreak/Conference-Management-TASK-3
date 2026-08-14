@@ -92,7 +92,7 @@ export async function PATCH(
       );
     }
 
-    const isCover = existing.itemType === "cover";
+    const isCover = (existing as { itemType?: string }).itemType === "cover";
     if (isCover !== (parsed.data.coverText != null)) {
       return withCorsHeaders(
         NextResponse.json({ error: isCover ? "This item is a cover slide; provide coverText" : "This item is a file; provide fileName" }, { status: 400 }),
@@ -103,7 +103,7 @@ export async function PATCH(
 
     const updated = await db.submission.update({
       where: { id: fileId },
-      data: isCover ? { coverText: parsed.data.coverText } : { fileName: parsed.data.fileName },
+      data: (isCover ? { coverText: parsed.data.coverText } : { fileName: parsed.data.fileName }) as any,
     });
 
     const reqHeaders = await headers();
@@ -119,7 +119,7 @@ export async function PATCH(
     });
 
     return withCorsHeaders(
-      NextResponse.json({ success: true, file: { id: updated.id, fileName: updated.fileName, coverText: updated.coverText } }),
+      NextResponse.json({ success: true, file: { id: updated.id, fileName: updated.fileName, coverText: (updated as any).coverText } }),
       request,
       allowedOrigins,
     );

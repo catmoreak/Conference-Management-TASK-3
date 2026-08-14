@@ -38,6 +38,34 @@ export const translations = {
     openInPowerPoint: "⬆ Open in PowerPoint",
     opening: "Opening…",
     view: "View",
+    chooseFile: "Choose File",
+    chooseFiles: "Choose Files",
+
+    roles: {
+      admin: "Administrator",
+      reviewer: "Reviewer & Staff",
+      presenter: "Presenter",
+    },
+
+    // Session Files Section
+    sessionFilesTitle: "Session Files",
+    sessionFilesDesc: "Presentation files for the selected live session — shared live with the main-panel file manager.",
+    reorderViewRoleHint: " Your role can reorder and view/download files here.",
+    selectSessionHint: "Select a live session above to see its files.",
+    loadingFiles: "Loading files…",
+    addCoverSlidePlaceholder: "Add a cover slide (e.g. event name)",
+    adding: "Adding…",
+    addCover: "Add cover",
+    noFilesForSession: "No files uploaded for this session yet.",
+    rename: "Rename",
+    delete: "Delete",
+    save: "Save",
+    cancel: "Cancel",
+    cover: "Cover",
+    coverSlide: "Cover slide",
+    uploadedBy: (user) => `uploaded by ${user}`,
+    deleteConfirm: "Delete this file? This cannot be undone.",
+
     displayStatus: {
       disconnected: "disconnected",
       connecting: "connecting",
@@ -107,6 +135,34 @@ export const translations = {
     openInPowerPoint: "⬆ PowerPointで開く",
     opening: "開いています…",
     view: "表示",
+    chooseFile: "ファイルを選択",
+    chooseFiles: "ファイルを選択",
+
+    roles: {
+      admin: "管理者",
+      reviewer: "査読者・スタッフ",
+      presenter: "発表者",
+    },
+
+    // Session Files Section
+    sessionFilesTitle: "セッションファイル",
+    sessionFilesDesc: "選択したライブセッションのプレゼンテーションファイル — ファイルマネージャーとリアルタイム共有されます。",
+    reorderViewRoleHint: " お使いの権限でファイルの並び替え・閲覧・ダウンロードが可能です。",
+    selectSessionHint: "ファイルを表示するには、上部でライブセッションを選択してください。",
+    loadingFiles: "ファイルを読み込み中…",
+    addCoverSlidePlaceholder: "カバースライドを追加 (例: イベント名)",
+    adding: "追加中…",
+    addCover: "カバーを追加",
+    noFilesForSession: "このセッションにはまだファイルがアップロードされていません。",
+    rename: "名前を変更",
+    delete: "削除",
+    save: "保存",
+    cancel: "キャンセル",
+    cover: "カバー",
+    coverSlide: "カバースライド",
+    uploadedBy: (user) => `${user} によりアップロード`,
+    deleteConfirm: "このファイルを削除しますか？この操作は取り消せません。",
+
     displayStatus: {
       disconnected: "未接続",
       connecting: "接続中",

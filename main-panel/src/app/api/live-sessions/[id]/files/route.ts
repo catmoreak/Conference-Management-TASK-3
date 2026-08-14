@@ -95,11 +95,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         itemType: true,
         coverText: true,
         presenter: { select: { id: true, displayName: true } },
-      },
+      } as any,
     });
 
     // Resolve uploader display names in one query rather than N+1.
-    const uploaderIds = [...new Set(files.map((f) => f.createdBy))];
+    const uploaderIds = [...new Set((files as any[]).map((f) => f.createdBy).filter((id): id is string => Boolean(id)))];
     const uploaders = await db.user.findMany({
       where: { id: { in: uploaderIds } },
       select: { id: true, name: true },
@@ -116,11 +116,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           publicUrl: f.publicUrl,
           status: f.status,
           sortOrder: f.sortOrder,
-          uploadedBy: uploaderNameById.get(f.createdBy) ?? "Unknown",
+          uploadedBy: uploaderNameById.get(String((f as any).createdBy)) ?? "Unknown",
           uploadedAt: f.createdAt,
           presenter: f.presenter,
-          itemType: f.itemType,
-          coverText: f.coverText,
+          itemType: (f as any).itemType,
+          coverText: (f as any).coverText,
         })),
       }),
       request,

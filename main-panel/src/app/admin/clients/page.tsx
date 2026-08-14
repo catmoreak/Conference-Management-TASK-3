@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "~/app/_components/AuthProvider";
 import { useRouter } from "next/navigation";
 import { api } from "~/trpc/react";
+import { useLanguage } from "~/app/_components/LanguageContext";
 
 type ClientStatus = "active" | "suspended";
 
 export default function AdminClientsPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const { lang, t } = useLanguage();
 
   const [isOpen, setIsOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<{
@@ -22,8 +24,13 @@ export default function AdminClientsPage() {
   const [formStatus, setFormStatus] = useState<ClientStatus>("active");
   const [error, setError] = useState("");
 
-  if (user?.role !== "admin") {
-    router.replace("/");
+  useEffect(() => {
+    if (user && user.role !== "admin") {
+      router.replace("/");
+    }
+  }, [user, router]);
+
+  if (!user || user.role !== "admin") {
     return null;
   }
 
@@ -86,10 +93,10 @@ export default function AdminClientsPage() {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">
-              Client Management
+              {t.clientsPage.title}
             </h1>
             <p className="text-text-secondary text-sm mt-1">
-              Manage conference clients (tenants) and their status
+              {t.clientsPage.subTitle}
             </p>
           </div>
           <button
@@ -97,7 +104,7 @@ export default function AdminClientsPage() {
             onClick={openCreate}
             className="bg-accent-blue hover:bg-accent-blue/90 text-white font-semibold px-4 py-2.5 rounded-lg text-sm transition shadow-hard hover:shadow-hard-hover hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0.5 active:translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent-blue"
           >
-            Add Client
+            {t.clientsPage.registerClient}
           </button>
         </div>
 
@@ -109,7 +116,7 @@ export default function AdminClientsPage() {
 
         {isLoading ? (
           <div className="flex items-center justify-center py-20 text-text-secondary">
-            Loading clients...
+            {lang === "ja" ? "クライアント端末情報を読み込み中..." : "Loading clients..."}
           </div>
         ) : (
           <div className="bg-bg-secondary border border-border-soft rounded-xl overflow-hidden shadow-hard-lg">
@@ -117,12 +124,12 @@ export default function AdminClientsPage() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-white border-b border-border-soft text-text-secondary text-xs font-semibold uppercase tracking-wider">
-                    <th className="px-6 py-4">Name</th>
-                    <th className="px-6 py-4">Slug</th>
-                    <th className="px-6 py-4">Events</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4">Created</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
+                    <th className="px-6 py-4">{t.clientsPage.clientName}</th>
+                    <th className="px-6 py-4">{lang === "ja" ? "スラッグ" : "Slug"}</th>
+                    <th className="px-6 py-4">{t.eventsPage.sessionsCount}</th>
+                    <th className="px-6 py-4">{t.clientsPage.status}</th>
+                    <th className="px-6 py-4">{lang === "ja" ? "登録日" : "Created"}</th>
+                    <th className="px-6 py-4 text-right">{t.actions.actions}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border-soft text-sm">
@@ -139,7 +146,7 @@ export default function AdminClientsPage() {
                               : "bg-error/10 text-error border border-error/30"
                           }`}
                         >
-                          {c.status}
+                          {c.status === "active" ? t.accountsPage.active : t.accountsPage.suspended}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-xs text-text-muted">
@@ -150,13 +157,13 @@ export default function AdminClientsPage() {
                           onClick={() => openEdit(c)}
                           className="px-3 py-1.5 rounded text-xs font-semibold bg-accent-blue/10 hover:bg-accent-blue/20 text-accent-blue border border-accent-blue/30 transition focus:outline-none focus:ring-2 focus:ring-accent-blue shadow-hard-sm"
                         >
-                          Edit
+                          {t.actions.edit}
                         </button>
                         <button
                           onClick={() => router.push(`/admin/events?clientId=${c.id}`)}
                           className="px-3 py-1.5 rounded text-xs font-semibold bg-accent-sage/10 hover:bg-accent-sage/20 text-accent-sage border border-accent-sage/30 transition shadow-hard-sm focus:outline-none"
                         >
-                          Events
+                          {t.nav.events}
                         </button>
                       </td>
                     </tr>
@@ -164,7 +171,7 @@ export default function AdminClientsPage() {
                   {(clients ?? []).length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-6 py-10 text-center text-text-muted">
-                        No clients yet. Add the first one.
+                        {t.clientsPage.noClients}
                       </td>
                     </tr>
                   )}
@@ -179,12 +186,12 @@ export default function AdminClientsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-text-primary/40 backdrop-blur-sm" role="dialog" aria-modal="true">
           <div className="bg-bg-secondary border border-border-soft w-full max-w-md rounded-xl p-6 shadow-hard-lg">
             <h2 className="text-xl font-bold text-text-primary mb-6">
-              {editTarget ? "Edit Client" : "Add Client"}
+              {editTarget ? (lang === "ja" ? "クライアント端末の編集" : "Edit Client") : t.clientsPage.registerClient}
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="client-name">
-                  Client Name
+                  {t.clientsPage.clientName}
                 </label>
                 <input
                   id="client-name"
@@ -198,7 +205,7 @@ export default function AdminClientsPage() {
               {!editTarget && (
                 <div>
                   <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="client-slug">
-                    Slug (lowercase, hyphens only)
+                    {lang === "ja" ? "スラッグ (小文字半角・ハイフンのみ)" : "Slug (lowercase, hyphens only)"}
                   </label>
                   <input
                     id="client-slug"
@@ -214,7 +221,7 @@ export default function AdminClientsPage() {
               {editTarget && (
                 <div>
                   <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="client-status">
-                    Status
+                    {t.clientsPage.status}
                   </label>
                   <select
                     id="client-status"
@@ -222,8 +229,8 @@ export default function AdminClientsPage() {
                     onChange={(e) => setFormStatus(e.target.value as ClientStatus)}
                     className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 transition focus:ring-2 focus:ring-accent-blue outline-none"
                   >
-                    <option value="active">Active</option>
-                    <option value="suspended">Suspended</option>
+                    <option value="active">{t.accountsPage.active}</option>
+                    <option value="suspended">{t.accountsPage.suspended}</option>
                   </select>
                 </div>
               )}
@@ -236,14 +243,14 @@ export default function AdminClientsPage() {
                   onClick={resetForm}
                   className="bg-transparent hover:bg-bg-primary text-text-secondary hover:text-text-primary border border-border-soft px-4 py-2 rounded-lg text-sm transition shadow-hard-sm"
                 >
-                  Cancel
+                  {t.actions.cancel}
                 </button>
                 <button
                   type="submit"
                   disabled={isPending}
                   className="bg-accent-blue hover:bg-accent-blue/90 text-white px-4 py-2 rounded-lg text-sm transition disabled:opacity-50 shadow-hard hover:shadow-hard-hover"
                 >
-                  {isPending ? "Saving..." : editTarget ? "Save Changes" : "Create Client"}
+                  {isPending ? (lang === "ja" ? "保存中..." : "Saving...") : editTarget ? (lang === "ja" ? "変更を保存" : "Save Changes") : t.actions.create}
                 </button>
               </div>
             </form>

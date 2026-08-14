@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "~/app/_components/AuthProvider";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "~/app/_components/LanguageContext";
 
 interface AuditLog {
   id: string;
@@ -20,6 +21,7 @@ interface AuditLog {
 export default function AuditLogsPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const { lang, t } = useLanguage();
 
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,7 +64,7 @@ export default function AuditLogsPage() {
       setLogs(data);
     } catch (err: unknown) {
       console.error(err);
-      setError("Failed to retrieve audit log listings.");
+      setError(lang === "ja" ? "監査ログの取得に失敗しました。" : "Failed to retrieve audit log listings.");
     } finally {
       setLoading(false);
     }
@@ -78,14 +80,13 @@ export default function AuditLogsPage() {
     setActionFilter("");
     setStartDateFilter("");
     setEndDateFilter("");
-    // Trigger fetch on next tick
     setTimeout(() => void fetchLogs(), 0);
   };
 
   if (loading && logs.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center bg-bg-primary text-text-primary">
-        <p className="text-lg">Retrieving security audit trail...</p>
+        <p className="text-lg">{lang === "ja" ? "セキュリティ監査ログを取得中..." : "Retrieving security audit trail..."}</p>
       </div>
     );
   }
@@ -94,9 +95,9 @@ export default function AuditLogsPage() {
     <div className="flex-1 bg-bg-primary text-text-secondary p-8">
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">Security Audit Logs</h1>
+          <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">{t.auditLogsPage.title}</h1>
           <p className="text-text-secondary text-sm mt-1">
-            Browse and filter platform access log events and authorization decisions
+            {t.auditLogsPage.subTitle}
           </p>
         </div>
 
@@ -111,7 +112,7 @@ export default function AuditLogsPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1.5" htmlFor="filter-actor">
-                Actor User ID
+                {lang === "ja" ? "実行者 ID (Actor)" : "Actor User ID"}
               </label>
               <input
                 id="filter-actor"
@@ -125,7 +126,7 @@ export default function AuditLogsPage() {
 
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1.5" htmlFor="filter-action">
-                Action Type
+                {lang === "ja" ? "操作種別 (Action)" : "Action Type"}
               </label>
               <input
                 id="filter-action"
@@ -139,7 +140,7 @@ export default function AuditLogsPage() {
 
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1.5" htmlFor="filter-start">
-                Start Date
+                {t.eventsPage.startDate}
               </label>
               <input
                 id="filter-start"
@@ -152,7 +153,7 @@ export default function AuditLogsPage() {
 
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1.5" htmlFor="filter-end">
-                End Date
+                {t.eventsPage.endDate}
               </label>
               <input
                 id="filter-end"
@@ -170,13 +171,13 @@ export default function AuditLogsPage() {
               onClick={handleResetFilters}
               className="bg-transparent hover:bg-white text-text-secondary hover:text-text-primary border border-border-soft px-4 py-2 rounded-lg text-xs font-semibold transition shadow-hard-sm"
             >
-              Reset Filters
+              {lang === "ja" ? "フィルターリセット" : "Reset Filters"}
             </button>
             <button
               type="submit"
               className="bg-accent-blue hover:bg-accent-blue/90 text-white px-4 py-2 rounded-lg text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-accent-blue shadow-hard hover:shadow-hard-hover active:translate-x-0.5 active:translate-y-0.5 hover:-translate-x-0.5 hover:-translate-y-0.5"
             >
-              Apply Filter
+              {t.actions.filter}
             </button>
           </div>
         </form>
@@ -187,20 +188,20 @@ export default function AuditLogsPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-white border-b border-border-soft text-text-secondary text-xs font-semibold uppercase tracking-wider">
-                  <th className="px-6 py-4">Occurred At</th>
-                  <th className="px-6 py-4">Actor</th>
-                  <th className="px-6 py-4">Action</th>
-                  <th className="px-6 py-4">Target (Type / ID)</th>
-                  <th className="px-6 py-4">IP / User Agent</th>
-                  <th className="px-6 py-4">Result</th>
-                  <th className="px-6 py-4">Metadata</th>
+                  <th className="px-6 py-4">{t.auditLogsPage.timestamp}</th>
+                  <th className="px-6 py-4">{t.auditLogsPage.user}</th>
+                  <th className="px-6 py-4">{t.auditLogsPage.action}</th>
+                  <th className="px-6 py-4">{t.auditLogsPage.target}</th>
+                  <th className="px-6 py-4">{t.auditLogsPage.ipAddress}</th>
+                  <th className="px-6 py-4">{t.staffDashboard.status}</th>
+                  <th className="px-6 py-4">{t.auditLogsPage.details}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-soft text-xs">
                 {logs.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-6 py-12 text-center text-text-muted text-sm bg-white">
-                      No security audit events match the current filter criteria.
+                      {t.auditLogsPage.noLogs}
                     </td>
                   </tr>
                 ) : (
@@ -210,7 +211,7 @@ export default function AuditLogsPage() {
                         {new Date(log.occurred_at).toLocaleString()}
                       </td>
                       <td className="px-6 py-4">
-                        <div className="font-semibold text-text-primary font-mono">{log.actor_id ?? "SYSTEM"}</div>
+                        <div className="font-semibold text-text-primary font-mono">{log.actor_id ?? (lang === "ja" ? "システム" : "SYSTEM")}</div>
                       </td>
                       <td className="px-6 py-4">
                         <span className="font-mono bg-white text-accent-blue px-2 py-1 rounded border border-border-soft shadow-hard-sm">

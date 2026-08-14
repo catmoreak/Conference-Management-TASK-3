@@ -4,10 +4,13 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "~/server/better-auth/client";
 import { useAuth } from "~/app/_components/AuthProvider";
+import { useLanguage } from "~/app/_components/LanguageContext";
 
 export default function LoginPage() {
   const router = useRouter();
   const { user, refetch } = useAuth();
+  const { lang, setLang, t } = useLanguage();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mfaCode, setMfaCode] = useState("");
@@ -44,35 +47,23 @@ export default function LoginPage() {
 
       if (signInError) {
         if (signInError.status === 403 && signInError.message?.includes("suspended")) {
-          setError("Account is suspended.");
+          setError(t.auth.suspendedAccount);
         } else {
-          setError(signInError.message ?? "Invalid email or password.");
+          setError(signInError.message ?? t.auth.invalidCreds);
         }
         setLoading(false);
         return;
       }
 
-      // If MFA is required (twoFactorEnabled or requires verification code)
-      // Better Auth redirects/throws error or indicates MFA verification state.
-      // Let's check if twoFactorRedirect or similar is active, or if we need to call totp.verify.
-      // Better Auth TOTP login follows: signIn.email returns info if MFA is pending/required.
-      // Normally, if MFA is enabled, we get an indication or error that requires TOTP verification.
-      // In Better Auth `two-factor` plugin, when signIn is called and MFA is active, it triggers
-      // a two-factor verification challenge. Let's handle verification input.
-      
-      // Let's query state or session to see if twoFactor is enabled.
-      // If we need to verify TOTP, we can transition state:
       const session = await authClient.getSession();
       if (session.data?.user && !session.data.user.twoFactorEnabled) {
-        // MFA not enabled, we logged in successfully
         await refetch();
       } else {
-        // Assume MFA challenge active since we enabled TOTP plugin
         setIsMfaStep(true);
       }
     } catch (err) {
       console.error(err);
-      setError("An unexpected error occurred.");
+      setError(t.auth.unexpectedError);
     } finally {
       setLoading(false);
     }
@@ -89,7 +80,7 @@ export default function LoginPage() {
       });
 
       if (mfaError) {
-        setError(mfaError.message ?? "Invalid verification code.");
+        setError(mfaError.message ?? t.auth.mfaFailed);
         setLoading(false);
         return;
       }
@@ -97,7 +88,7 @@ export default function LoginPage() {
       await refetch();
     } catch (err) {
       console.error(err);
-      setError("MFA validation failed.");
+      setError(t.auth.mfaFailed);
     } finally {
       setLoading(false);
     }
@@ -112,39 +103,54 @@ export default function LoginPage() {
           <div>
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-[#10B981] rounded-lg flex items-center justify-center text-[#0B1220]">
-                {/* Green lightning bolt / shield check icon */}
                 <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
                   <path d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
               <div className="text-left">
-                <span className="font-bold text-lg block leading-none">Podium</span>
-                <span className="text-[10px] text-[#10B981] font-bold tracking-widest uppercase">Platform</span>
+                <span className="font-bold text-lg block leading-none">{t.brand}</span>
+                <span className="text-[10px] text-[#10B981] font-bold tracking-widest uppercase">{t.platform}</span>
               </div>
             </div>
           </div>
           {/* EN/JP indicator */}
           <div className="inline-flex border border-gray-800 rounded-lg p-1 bg-[#1A2333]/50 text-xs">
-            <span className="px-2.5 py-1 rounded bg-[#10B981] text-[#0B1220] font-bold">EN</span>
-            <span className="px-2.5 py-1 rounded text-gray-400 font-semibold cursor-pointer">JP</span>
+            <button
+              type="button"
+              onClick={() => setLang("en")}
+              className={`px-2.5 py-1 rounded font-bold transition-colors ${
+                lang === "en" ? "bg-[#10B981] text-[#0B1220]" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              onClick={() => setLang("ja")}
+              className={`px-2.5 py-1 rounded font-bold transition-colors ${
+                lang === "ja" ? "bg-[#10B981] text-[#0B1220]" : "text-gray-400 hover:text-white"
+              }`}
+            >
+              JP
+            </button>
           </div>
         </div>
 
         {/* Center content */}
         <div className="max-w-xl my-auto space-y-8">
           <h1 className="text-4xl lg:text-5xl font-extrabold tracking-tight leading-tight">
-            Seamless presentation delivery for your events
+            {t.auth.heroTitle}
           </h1>
           <p className="text-gray-300 text-base leading-relaxed">
-            Manage speaker slides, monitor live sessions, and drive podium displays in real time.
+            {t.auth.heroSub}
           </p>
 
           <ul className="space-y-4">
             {[
-              "Live session slide control",
-              "Real-time display syncing",
-              "Speaker material uploads",
-              "Presentation audit logging"
+              t.auth.feature1,
+              t.auth.feature2,
+              t.auth.feature3,
+              t.auth.feature4,
             ].map((text, idx) => (
               <li key={idx} className="flex items-center gap-3 text-sm text-gray-200">
                 <svg className="w-5 h-5 text-[#10B981] fill-current flex-shrink-0" viewBox="0 0 20 20">
@@ -172,15 +178,15 @@ export default function LoginPage() {
                 <path d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </div>
-            <span className="font-bold text-xl text-[#0B1220]">Podium</span>
+            <span className="font-bold text-xl text-[#0B1220]">{t.brand}</span>
           </div>
 
           <div className="mb-8">
             <h2 className="text-3xl font-bold text-[#0B1220] tracking-tight">
-              Welcome back
+              {t.auth.welcomeBack}
             </h2>
             <p className="text-sm text-gray-500 mt-2">
-              Sign in to your administrator account
+              {t.auth.signInSub}
             </p>
           </div>
 
@@ -202,7 +208,7 @@ export default function LoginPage() {
                   htmlFor="email"
                   className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2"
                 >
-                  Email
+                  {t.auth.emailLabel}
                 </label>
                 <input
                   id="email"
@@ -223,7 +229,7 @@ export default function LoginPage() {
                   htmlFor="password"
                   className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2"
                 >
-                  Password
+                  {t.auth.passwordLabel}
                 </label>
                 <div className="relative">
                   <input
@@ -264,7 +270,7 @@ export default function LoginPage() {
                 suppressHydrationWarning
                 className="w-full bg-[#0B1220] hover:bg-[#1A253C] text-white font-semibold py-3 px-4 rounded-xl text-sm transition shadow-sm hover:shadow active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-[#0B1220] disabled:opacity-50"
               >
-                {loading ? "Verifying..." : "Login"}
+                {loading ? t.actions.verifying : t.actions.login}
               </button>
             </form>
           ) : (
@@ -274,10 +280,10 @@ export default function LoginPage() {
                   htmlFor="mfaCode"
                   className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2"
                 >
-                  Verification Code
+                  {t.auth.verificationCodeLabel}
                 </label>
                 <p className="text-xs text-gray-500 mb-3">
-                  Enter the 6-digit TOTP code from your authenticator application.
+                  {t.auth.mfaHelp}
                 </p>
                 <input
                   id="mfaCode"
@@ -302,7 +308,7 @@ export default function LoginPage() {
                 suppressHydrationWarning
                 className="w-full bg-[#0B1220] hover:bg-[#1A253C] text-white font-semibold py-3 px-4 rounded-xl text-sm transition shadow-sm hover:shadow active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-[#0B1220] disabled:opacity-50"
               >
-                {loading ? "Verifying..." : "Verify Code"}
+                {loading ? t.actions.verifying : t.actions.verifyCode}
               </button>
 
               <button
@@ -310,14 +316,14 @@ export default function LoginPage() {
                 onClick={() => setIsMfaStep(false)}
                 className="w-full bg-transparent hover:bg-gray-50 text-gray-600 hover:text-gray-900 border border-gray-200 py-2.5 rounded-xl text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#0B1220]"
               >
-                Back to Sign In
+                {t.auth.backToSignIn}
               </button>
             </form>
           )}
 
           <div className="mt-8 text-center">
             <span className="text-xs text-gray-400 hover:text-[#0B1220] cursor-pointer transition font-medium">
-              Apply for Organizer Account
+              {t.auth.applyForOrganizer}
             </span>
           </div>
         </div>

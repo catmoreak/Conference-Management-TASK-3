@@ -5,12 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "~/trpc/react";
 import { useAuth } from "~/app/_components/AuthProvider";
+import { useLanguage } from "~/app/_components/LanguageContext";
 
 export default function AssignmentsPage() {
   const { user } = useAuth();
   const router = useRouter();
   const params = useParams<{ eventId: string; sessionId: string }>();
   const { eventId, sessionId } = params;
+  const { lang, t } = useLanguage();
 
   const [isOpen, setIsOpen] = useState(false);
   const [formPresenterId, setFormPresenterId] = useState("");
@@ -54,7 +56,7 @@ export default function AssignmentsPage() {
     e.preventDefault();
     setError("");
     if (!formPresenterId) {
-      setError("Please select a presenter");
+      setError(lang === "ja" ? "発表者を選択してください" : "Please select a presenter");
       return;
     }
     assignMutation.mutate({
@@ -65,7 +67,6 @@ export default function AssignmentsPage() {
     });
   }
 
-  // Presenters not yet assigned to this session
   const assignedIds = new Set((assignments ?? []).map((a) => a.presenterId));
   const availablePresenters = (presenters ?? []).filter((p) => !assignedIds.has(p.id));
 
@@ -74,16 +75,16 @@ export default function AssignmentsPage() {
       <div className="max-w-4xl mx-auto">
         <div className="mb-2 flex items-center gap-3 text-xs text-accent-blue">
           <Link href={`/admin/events/${eventId}/sessions`} className="hover:underline">
-            ← Back to Sessions
+            ← {lang === "ja" ? "セッション一覧へ戻る" : "Back to Sessions"}
           </Link>
         </div>
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">
-              Presenter Assignments
+              {lang === "ja" ? "発表者の割り当て" : "Presenter Assignments"}
             </h1>
             <p className="text-text-secondary text-sm mt-1">
-              {session ? `Session: ${session.name}` : "Loading..."}
+              {session ? `${lang === "ja" ? "対象セッション:" : "Session:"} ${session.name}` : (lang === "ja" ? "読み込み中..." : "Loading...")}
             </p>
           </div>
           {availablePresenters.length > 0 && (
@@ -92,7 +93,7 @@ export default function AssignmentsPage() {
               onClick={() => { setError(""); setIsOpen(true); }}
               className="bg-accent-blue hover:bg-accent-blue/90 text-white font-semibold px-4 py-2.5 rounded-lg text-sm transition shadow-hard hover:shadow-hard-hover hover:-translate-x-0.5 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent-blue"
             >
-              Assign Presenter
+              {lang === "ja" ? "発表者を割り当てる" : "Assign Presenter"}
             </button>
           )}
         </div>
@@ -102,7 +103,7 @@ export default function AssignmentsPage() {
         )}
 
         {isLoading ? (
-          <div className="py-20 text-center text-text-secondary">Loading assignments...</div>
+          <div className="py-20 text-center text-text-secondary">{lang === "ja" ? "割当情報を読み込み中..." : "Loading assignments..."}</div>
         ) : (
           <div className="space-y-3">
             {(assignments ?? []).map((a, idx) => (
@@ -115,7 +116,7 @@ export default function AssignmentsPage() {
                       {[a.presenter.title, a.presenter.organization].filter(Boolean).join(" · ") || "—"}
                     </p>
                     {a.duration && (
-                      <p className="text-xs text-text-muted mt-0.5">{a.duration} min</p>
+                      <p className="text-xs text-text-muted mt-0.5">{a.duration} {lang === "ja" ? "分" : "min"}</p>
                     )}
                   </div>
                 </div>
@@ -135,20 +136,20 @@ export default function AssignmentsPage() {
                   />
                   <button
                     onClick={() => {
-                      if (confirm(`Remove "${a.presenter.displayName}" from this session?`)) {
+                      if (confirm(lang === "ja" ? `"${a.presenter.displayName}" をこのセッションから解除しますか？` : `Remove "${a.presenter.displayName}" from this session?`)) {
                         unassignMutation.mutate({ id: a.id });
                       }
                     }}
                     className="px-3 py-1.5 rounded text-xs font-semibold bg-error/10 hover:bg-error/20 text-error border border-error/30 transition shadow-hard-sm"
                   >
-                    Remove
+                    {lang === "ja" ? "解除" : "Remove"}
                   </button>
                 </div>
               </div>
             ))}
             {(assignments ?? []).length === 0 && (
               <div className="bg-bg-secondary border border-border-soft rounded-xl p-10 text-center text-text-muted shadow-hard">
-                No presenters assigned to this session yet.
+                {lang === "ja" ? "このセッションには発表者がまだ割り当てられていません。" : "No presenters assigned to this session yet."}
               </div>
             )}
           </div>
@@ -158,13 +159,13 @@ export default function AssignmentsPage() {
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-text-primary/40 backdrop-blur-sm" role="dialog" aria-modal="true">
           <div className="bg-bg-secondary border border-border-soft w-full max-w-md rounded-xl p-6 shadow-hard-lg">
-            <h2 className="text-xl font-bold text-text-primary mb-6">Assign Presenter</h2>
+            <h2 className="text-xl font-bold text-text-primary mb-6">{lang === "ja" ? "発表者の割り当て" : "Assign Presenter"}</h2>
             <form onSubmit={handleAssign} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="assign-presenter">Presenter</label>
+                <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="assign-presenter">{t.staffDashboard.speaker}</label>
                 <select id="assign-presenter" value={formPresenterId} onChange={(e) => setFormPresenterId(e.target.value)}
                   className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none">
-                  <option value="">— Select a presenter —</option>
+                  <option value="">{lang === "ja" ? "— 発表者を選択 —" : "— Select a presenter —"}</option>
                   {availablePresenters.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.displayName}{p.organization ? ` (${p.organization})` : ""}
@@ -174,15 +175,15 @@ export default function AssignmentsPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="assign-order">Sort Order</label>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="assign-order">{lang === "ja" ? "順序" : "Sort Order"}</label>
                   <input id="assign-order" type="number" min="0" value={formSortOrder}
                     onChange={(e) => setFormSortOrder(e.target.value)}
                     className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="assign-duration">Duration (min)</label>
+                  <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="assign-duration">{lang === "ja" ? "発表時間 (分)" : "Duration (min)"}</label>
                   <input id="assign-duration" type="number" min="1" value={formDuration}
-                    onChange={(e) => setFormDuration(e.target.value)} placeholder="Optional"
+                    onChange={(e) => setFormDuration(e.target.value)} placeholder={lang === "ja" ? "任意" : "Optional"}
                     className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none placeholder:text-text-muted" />
                 </div>
               </div>
@@ -190,11 +191,11 @@ export default function AssignmentsPage() {
               <div className="flex justify-end gap-3 mt-6">
                 <button type="button" onClick={resetForm}
                   className="bg-transparent hover:bg-bg-primary text-text-secondary border border-border-soft px-4 py-2 rounded-lg text-sm transition shadow-hard-sm">
-                  Cancel
+                  {t.actions.cancel}
                 </button>
                 <button type="submit" disabled={assignMutation.isPending}
                   className="bg-accent-blue hover:bg-accent-blue/90 text-white px-4 py-2 rounded-lg text-sm transition disabled:opacity-50 shadow-hard">
-                  {assignMutation.isPending ? "Assigning..." : "Assign"}
+                  {assignMutation.isPending ? (lang === "ja" ? "割り当て中..." : "Assigning...") : (lang === "ja" ? "割り当てる" : "Assign")}
                 </button>
               </div>
             </form>

@@ -3,12 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "~/trpc/react";
 import { useAuth } from "~/app/_components/AuthProvider";
+import { useLanguage } from "~/app/_components/LanguageContext";
 import { env } from "~/env";
 
 type ConnState = "disconnected" | "connecting" | "connected" | "locked" | "error";
 
 export default function PresOpsDashboard() {
   const { user, signOut } = useAuth();
+  const { lang, t } = useLanguage();
+
   const [eventId, setEventId] = useState("");
   const [liveSessionId, setLiveSessionId] = useState("");
   const [submissionId, setSubmissionId] = useState("");
@@ -62,11 +65,6 @@ export default function PresOpsDashboard() {
     socketRef.current = socket;
 
     socket.addEventListener("open", () => {
-      // actorType/serviceId only match the shared PodiumAuthHandshake wire
-      // shape (see scripts/ws-server.ts) so this operator connection looks
-      // identical on the wire to podium's own WebSocketClient -- the server
-      // never trusts these client-asserted fields. Purpose ("control") and
-      // role come solely from the verified JWT minted by /api/ws/token.
       socket.send(
         JSON.stringify({
           type: "auth",
@@ -82,7 +80,7 @@ export default function PresOpsDashboard() {
         const msg = JSON.parse(event.data as string) as Record<string, unknown>;
         if (msg.type === "error" && msg.code === "control_locked") {
           setConnState("locked");
-          appendLog("Another operator already controls this session.");
+          appendLog(lang === "ja" ? "他のオペレーターがこのセッションを既に操作中です。" : "Another operator already controls this session.");
           return;
         }
         if (msg.type === "status" && msg.status === "connected") {
@@ -96,12 +94,12 @@ export default function PresOpsDashboard() {
 
     socket.addEventListener("close", () => {
       setConnState("disconnected");
-      appendLog("Disconnected.");
+      appendLog(lang === "ja" ? "切断されました。" : "Disconnected.");
     });
 
     socket.addEventListener("error", () => {
       setConnState("error");
-      appendLog("WebSocket error.");
+      appendLog(lang === "ja" ? "WebSocket エラー。" : "WebSocket error.");
     });
   }
 
@@ -113,7 +111,7 @@ export default function PresOpsDashboard() {
   function sendCommand(command: Record<string, unknown>) {
     const socket = socketRef.current;
     if (socket?.readyState !== WebSocket.OPEN) {
-      appendLog("Not connected.");
+      appendLog(lang === "ja" ? "未接続です。" : "Not connected.");
       return;
     }
     socket.send(JSON.stringify({ sessionId: liveSessionId, ...command }));
@@ -127,16 +125,15 @@ export default function PresOpsDashboard() {
     if (!selectedSubmission) return;
     setLoadingFile(true);
     try {
-      if (selectedSubmission.itemType === "cover") {
-        sendCommand({
-          type: "show_cover",
-          presentationId: selectedSubmission.id,
-          text: selectedSubmission.coverText ?? "",
-        });
-        return;
-      }
-      // Fetched fresh right before use -- short-lived presigned URL
-      // (300s TTL), not the submission's old permanent public link.
+    const sub = selectedSubmission as any;
+    if (sub?.itemType === "cover") {
+      sendCommand({
+        type: "show_cover",
+        presentationId: sub.id,
+        text: sub.coverText ?? "",
+      });
+      return;
+    }
       const res = await fetch(`/api/submissions/${selectedSubmission.id}/playback-url`);
       const data = (await res.json()) as { url?: string; error?: string };
       if (!res.ok || !data.url) {
@@ -153,21 +150,34 @@ export default function PresOpsDashboard() {
     }
   }
 
+  const getConnStateLabel = (state: ConnState) => {
+    if (lang === "ja") {
+      switch (state) {
+        case "connected": return "接続中";
+        case "connecting": return "接続処理中...";
+        case "disconnected": return "未接続";
+        case "locked": return "ロック中";
+        case "error": return "エラー";
+      }
+    }
+    return state;
+  };
+
   return (
     <div className="flex-1 bg-[#F8FAFC] text-text-secondary p-8">
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-[#0B1220] tracking-tight">Live Control</h1>
+            <h1 className="text-2xl font-bold text-[#0B1220] tracking-tight">{t.presOpsDashboard.title}</h1>
             <p className="text-gray-500 text-xs mt-1">
-              Connect to a live session and drive the podium display in real time.
+              {t.presOpsDashboard.subTitle}
             </p>
           </div>
           <button
             onClick={() => void signOut()}
             className="bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-semibold px-4 py-2.5 rounded-xl text-sm transition shadow-sm"
           >
-            Sign Out
+            {t.signOut}
           </button>
         </div>
 
@@ -175,7 +185,7 @@ export default function PresOpsDashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2" htmlFor="ev-select">
-                Event
+                {lang === "ja" ? "イベント" : "Event"}
               </label>
               <select
                 id="ev-select"
@@ -187,7 +197,7 @@ export default function PresOpsDashboard() {
                 }}
                 className="w-full bg-white border border-gray-200 text-text-primary text-sm rounded-xl px-3 py-2.5 focus:border-[#0B1220] focus:ring-2 focus:ring-[#0B1220]/10 outline-none transition"
               >
-                <option value="">— Select —</option>
+                <option value="">{t.actions.select}</option>
                 {(events ?? []).map((ev) => (
                   <option key={ev.id} value={ev.id}>
                     {ev.name}
@@ -198,7 +208,7 @@ export default function PresOpsDashboard() {
 
             <div>
               <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2" htmlFor="ls-select">
-                Live Session
+                {t.presOpsDashboard.activeSession}
               </label>
               <select
                 id="ls-select"
@@ -210,7 +220,7 @@ export default function PresOpsDashboard() {
                 }}
                 className="w-full bg-white border border-gray-200 text-text-primary text-sm rounded-xl px-3 py-2.5 focus:border-[#0B1220] focus:ring-2 focus:ring-[#0B1220]/10 outline-none transition disabled:opacity-50"
               >
-                <option value="">— Select —</option>
+                <option value="">{t.actions.select}</option>
                 {(sessions ?? []).map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name} {s.room ? `(${s.room.name})` : ""}
@@ -221,7 +231,7 @@ export default function PresOpsDashboard() {
 
             <div>
               <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2" htmlFor="sub-select">
-                Approved File
+                {lang === "ja" ? "承認済みファイル" : "Approved File"}
               </label>
               <select
                 id="sub-select"
@@ -230,11 +240,11 @@ export default function PresOpsDashboard() {
                 onChange={(e) => setSubmissionId(e.target.value)}
                 className="w-full bg-white border border-gray-200 text-text-primary text-sm rounded-xl px-3 py-2.5 focus:border-[#0B1220] focus:ring-2 focus:ring-[#0B1220]/10 outline-none transition disabled:opacity-50"
               >
-                <option value="">— Select —</option>
+                <option value="">{t.actions.select}</option>
                 {(submissions ?? []).map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.itemType === "cover"
-                      ? `— ${s.coverText ?? "Cover"} —`
+                    {(s as any).itemType === "cover"
+                      ? `— ${(s as any).coverText ?? (lang === "ja" ? "カバー" : "Cover")} —`
                       : `${s.fileName ?? s.id} ${s.presenter ? `— ${s.presenter.displayName}` : ""}`}
                   </option>
                 ))}
@@ -252,14 +262,14 @@ export default function PresOpsDashboard() {
                     : "bg-gray-100 text-gray-600 border-gray-200"
               }`}
             >
-              {connState}
+              {getConnStateLabel(connState)}
             </span>
             {connState === "connected" ? (
               <button
                 onClick={handleDisconnect}
                 className="px-4 py-2 rounded-xl text-xs font-semibold bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition shadow-sm"
               >
-                Disconnect
+                {lang === "ja" ? "切断" : "Disconnect"}
               </button>
             ) : (
               <button
@@ -267,57 +277,61 @@ export default function PresOpsDashboard() {
                 onClick={() => void handleConnect()}
                 className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#0B1220] hover:bg-[#1A253C] text-white transition shadow-sm disabled:opacity-50"
               >
-                {connState === "connecting" ? "Connecting..." : "Connect"}
+                {connState === "connecting" ? (lang === "ja" ? "接続中..." : "Connecting...") : (lang === "ja" ? "接続" : "Connect")}
               </button>
             )}
           </div>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">
-          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Playback Controls</h2>
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">
+            {lang === "ja" ? "再生・投影コントロール" : "Playback Controls"}
+          </h2>
           <div className="flex flex-wrap gap-2.5">
             <button
               disabled={!canOperate || !selectedSubmission || loadingFile}
               onClick={() => void handleLoad()}
               className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-[#0B1220] hover:bg-[#1A253C] text-white transition shadow-sm disabled:opacity-50"
             >
-              {loadingFile ? "Loading..." : "Load"}
+              {loadingFile ? (lang === "ja" ? "読み込み中..." : "Loading...") : (lang === "ja" ? "読み込み" : "Load")}
             </button>
             <button
               disabled={!canOperate}
               onClick={() => sendCommand({ type: "play" })}
               className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 transition shadow-sm disabled:opacity-50"
             >
-              Play
+              {lang === "ja" ? "再生" : "Play"}
             </button>
             <button
               disabled={!canOperate}
               onClick={() => sendCommand({ type: "prev_slide" })}
               className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 transition shadow-sm disabled:opacity-50"
             >
-              ← Prev
+              {t.presOpsDashboard.previousSlide}
             </button>
             <button
               disabled={!canOperate}
               onClick={() => sendCommand({ type: "next_slide" })}
               className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 transition shadow-sm disabled:opacity-50"
             >
-              Next →
+              {t.presOpsDashboard.nextSlide}
             </button>
             <button
               disabled={!canOperate}
               onClick={() => sendCommand({ type: "exit_slideshow" })}
               className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition shadow-sm disabled:opacity-50"
             >
-              Exit
+              {lang === "ja" ? "終了" : "Exit"}
             </button>
           </div>
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
-          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Activity Log</h2>
+          <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+            {lang === "ja" ? "アクティビティログ" : "Activity Log"}
+          </h2>
           <div className="font-mono text-xs text-text-secondary space-y-1.5 max-h-56 overflow-y-auto">
-            {log.length === 0 && <p className="text-gray-400 font-semibold">No activity yet.</p>}
+            {log.length === 0 && <p className="text-gray-400 font-semibold">{lang === "ja" ? "アクティビティはまだありません。" : "No activity yet."}</p>}
             {log.map((line, i) => (
               <p key={i} className="border-b border-gray-50 pb-1">{line}</p>
             ))}

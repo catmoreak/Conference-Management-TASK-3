@@ -1,19 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "~/app/_components/AuthProvider";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "~/trpc/react";
+import { useLanguage } from "~/app/_components/LanguageContext";
 
 type EventStatus = "draft" | "published" | "completed" | "cancelled";
-
-const STATUS_LABELS: Record<EventStatus, string> = {
-  draft: "Draft",
-  published: "Published",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
 
 const STATUS_COLORS: Record<EventStatus, string> = {
   draft: "bg-accent-slate/10 text-accent-slate border-accent-slate/30",
@@ -25,6 +19,7 @@ const STATUS_COLORS: Record<EventStatus, string> = {
 export default function AdminEventsPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const { lang, t } = useLanguage();
 
   const [isOpen, setIsOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<{ id: string } | null>(null);
@@ -36,8 +31,13 @@ export default function AdminEventsPage() {
   const [formStatus, setFormStatus] = useState<EventStatus>("draft");
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    if (user && user.role !== "admin" && user.role !== "reviewer") {
+      router.replace("/");
+    }
+  }, [user, router]);
+
   if (!user || (user.role !== "admin" && user.role !== "reviewer")) {
-    router.replace("/");
     return null;
   }
 
@@ -122,14 +122,31 @@ export default function AdminEventsPage() {
 
   const isPending = createMutation.isPending || updateMutation.isPending;
 
+  const getStatusLabel = (st: EventStatus) => {
+    if (lang === "ja") {
+      switch (st) {
+        case "draft": return "下書き";
+        case "published": return "公開済み";
+        case "completed": return "終了";
+        case "cancelled": return "キャンセル";
+      }
+    }
+    switch (st) {
+      case "draft": return "Draft";
+      case "published": return "Published";
+      case "completed": return "Completed";
+      case "cancelled": return "Cancelled";
+    }
+  };
+
   return (
     <div className="flex-1 bg-bg-primary text-text-secondary p-8">
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">Events</h1>
+            <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">{t.eventsPage.title}</h1>
             <p className="text-text-secondary text-sm mt-1">
-              Manage conference events within your tenant
+              {t.eventsPage.subTitle}
             </p>
           </div>
           <button
@@ -137,7 +154,7 @@ export default function AdminEventsPage() {
             onClick={openCreate}
             className="bg-accent-blue hover:bg-accent-blue/90 text-white font-semibold px-4 py-2.5 rounded-lg text-sm transition shadow-hard hover:shadow-hard-hover hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0.5 active:translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent-blue"
           >
-            Create Event
+            {t.eventsPage.createEvent}
           </button>
         </div>
 
@@ -148,7 +165,7 @@ export default function AdminEventsPage() {
         )}
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-20 text-text-secondary">Loading events...</div>
+          <div className="flex items-center justify-center py-20 text-text-secondary">{lang === "ja" ? "イベントを読み込み中..." : "Loading events..."}</div>
         ) : (
           <div className="grid gap-4">
             {(events ?? []).map((ev) => (
@@ -158,21 +175,21 @@ export default function AdminEventsPage() {
                     <div className="flex items-center gap-3 mb-1">
                       <h2 className="text-base font-bold text-text-primary truncate">{ev.name}</h2>
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border shadow-hard-sm ${STATUS_COLORS[ev.status as EventStatus]}`}>
-                        {STATUS_LABELS[ev.status as EventStatus]}
+                        {getStatusLabel(ev.status as EventStatus)}
                       </span>
                     </div>
                     {ev.description && (
                       <p className="text-xs text-text-secondary mt-0.5 line-clamp-1">{ev.description}</p>
                     )}
                     <div className="flex flex-wrap gap-4 mt-2 text-xs text-text-muted">
-                      {ev.startDate && <span>Start: {new Date(ev.startDate).toLocaleDateString()}</span>}
-                      {ev.endDate && <span>End: {new Date(ev.endDate).toLocaleDateString()}</span>}
-                      {ev.location && <span>?? {ev.location}</span>}
+                      {ev.startDate && <span>{lang === "ja" ? "開始:" : "Start:"} {new Date(ev.startDate).toLocaleDateString()}</span>}
+                      {ev.endDate && <span>{lang === "ja" ? "終了:" : "End:"} {new Date(ev.endDate).toLocaleDateString()}</span>}
+                      {ev.location && <span>📍 {ev.location}</span>}
                     </div>
                     <div className="flex gap-4 mt-2 text-xs text-text-secondary">
-                      <span>{ev._count.rooms} room{ev._count.rooms !== 1 ? "s" : ""}</span>
-                      <span>{ev._count.liveSessions} session{ev._count.liveSessions !== 1 ? "s" : ""}</span>
-                      <span>{ev._count.presenters} presenter{ev._count.presenters !== 1 ? "s" : ""}</span>
+                      <span>{ev._count.rooms} {lang === "ja" ? "会場" : "room(s)"}</span>
+                      <span>{ev._count.liveSessions} {lang === "ja" ? "セッション" : "session(s)"}</span>
+                      <span>{ev._count.presenters} {lang === "ja" ? "発表者" : "presenter(s)"}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -180,25 +197,25 @@ export default function AdminEventsPage() {
                       onClick={() => openEdit(ev)}
                       className="px-3 py-1.5 rounded text-xs font-semibold bg-accent-blue/10 hover:bg-accent-blue/20 text-accent-blue border border-accent-blue/30 transition shadow-hard-sm"
                     >
-                      Edit
+                      {t.actions.edit}
                     </button>
                     <Link
                       href={`/admin/events/${ev.id}/rooms`}
                       className="px-3 py-1.5 rounded text-xs font-semibold bg-bg-primary hover:bg-white text-text-secondary border border-border-soft transition shadow-hard-sm"
                     >
-                      Rooms
+                      {t.eventsPage.manageRooms}
                     </Link>
                     <Link
                       href={`/admin/events/${ev.id}/sessions`}
                       className="px-3 py-1.5 rounded text-xs font-semibold bg-bg-primary hover:bg-white text-text-secondary border border-border-soft transition shadow-hard-sm"
                     >
-                      Sessions
+                      {t.eventsPage.manageSessions}
                     </Link>
                     <Link
                       href={`/admin/events/${ev.id}/presenters`}
                       className="px-3 py-1.5 rounded text-xs font-semibold bg-bg-primary hover:bg-white text-text-secondary border border-border-soft transition shadow-hard-sm"
                     >
-                      Presenters
+                      {t.eventsPage.managePresenters}
                     </Link>
                   </div>
                 </div>
@@ -206,7 +223,7 @@ export default function AdminEventsPage() {
             ))}
             {(events ?? []).length === 0 && (
               <div className="bg-bg-secondary border border-border-soft rounded-xl p-10 text-center text-text-muted shadow-hard">
-                No events yet. Create the first one.
+                {t.eventsPage.noEvents}
               </div>
             )}
           </div>
@@ -217,12 +234,12 @@ export default function AdminEventsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-text-primary/40 backdrop-blur-sm" role="dialog" aria-modal="true">
           <div className="bg-bg-secondary border border-border-soft w-full max-w-lg rounded-xl p-6 shadow-hard-lg overflow-y-auto max-h-[90vh]">
             <h2 className="text-xl font-bold text-text-primary mb-6">
-              {editTarget ? "Edit Event" : "Create Event"}
+              {editTarget ? (lang === "ja" ? "イベントの編集" : "Edit Event") : t.eventsPage.createEvent}
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="ev-name">
-                  Event Name
+                  {t.eventsPage.eventName}
                 </label>
                 <input
                   id="ev-name"
@@ -235,7 +252,7 @@ export default function AdminEventsPage() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="ev-desc">
-                  Description
+                  {lang === "ja" ? "概要・説明" : "Description"}
                 </label>
                 <textarea
                   id="ev-desc"
@@ -248,7 +265,7 @@ export default function AdminEventsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="ev-start">
-                    Start Date
+                    {t.eventsPage.startDate}
                   </label>
                   <input
                     id="ev-start"
@@ -260,7 +277,7 @@ export default function AdminEventsPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="ev-end">
-                    End Date
+                    {t.eventsPage.endDate}
                   </label>
                   <input
                     id="ev-end"
@@ -273,7 +290,7 @@ export default function AdminEventsPage() {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="ev-location">
-                  Location
+                  {t.eventsPage.location}
                 </label>
                 <input
                   id="ev-location"
@@ -287,7 +304,7 @@ export default function AdminEventsPage() {
               {editTarget && (
                 <div>
                   <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="ev-status">
-                    Status
+                    {lang === "ja" ? "ステータス" : "Status"}
                   </label>
                   <select
                     id="ev-status"
@@ -295,10 +312,10 @@ export default function AdminEventsPage() {
                     onChange={(e) => setFormStatus(e.target.value as EventStatus)}
                     className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 transition focus:ring-2 focus:ring-accent-blue outline-none"
                   >
-                    <option value="draft">Draft</option>
-                    <option value="published">Published</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
+                    <option value="draft">{getStatusLabel("draft")}</option>
+                    <option value="published">{getStatusLabel("published")}</option>
+                    <option value="completed">{getStatusLabel("completed")}</option>
+                    <option value="cancelled">{getStatusLabel("cancelled")}</option>
                   </select>
                 </div>
               )}
@@ -309,14 +326,14 @@ export default function AdminEventsPage() {
                   onClick={resetForm}
                   className="bg-transparent hover:bg-bg-primary text-text-secondary border border-border-soft px-4 py-2 rounded-lg text-sm transition shadow-hard-sm"
                 >
-                  Cancel
+                  {t.actions.cancel}
                 </button>
                 <button
                   type="submit"
                   disabled={isPending}
                   className="bg-accent-blue hover:bg-accent-blue/90 text-white px-4 py-2 rounded-lg text-sm transition disabled:opacity-50 shadow-hard hover:shadow-hard-hover"
                 >
-                  {isPending ? "Saving..." : editTarget ? "Save Changes" : "Create Event"}
+                  {isPending ? (lang === "ja" ? "保存中..." : "Saving...") : editTarget ? (lang === "ja" ? "変更を保存" : "Save Changes") : t.eventsPage.createEvent}
                 </button>
               </div>
             </form>

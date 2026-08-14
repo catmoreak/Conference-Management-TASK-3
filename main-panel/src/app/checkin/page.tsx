@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useLanguage } from "~/app/_components/LanguageContext";
 
 type Event = {
   id: string;
@@ -34,17 +35,13 @@ type Presenter = {
   submissions: SubmissionSummary[];
 };
 
-const STATUS_BADGE: Record<string, { label: string; bg: string; fg: string }> = {
-  pending: { label: "Pending review", bg: "#fef3c7", fg: "#92400e" },
-  approved: { label: "Approved", bg: "#dcfce7", fg: "#166534" },
-  rejected: { label: "Needs a new upload", bg: "#fee2e2", fg: "#b91c1c" },
-};
-
 type Step = "select-event" | "select-presenter" | "confirm" | "upload" | "complete";
 
 const INACTIVITY_TIMEOUT = 60_000; // 60 seconds
 
 export default function CheckinPage() {
+  const { lang, t } = useLanguage();
+
   const [step, setStep] = useState<Step>("select-event");
   const [events, setEvents] = useState<Event[]>([]);
   const [presenters, setPresenters] = useState<Presenter[]>([]);
@@ -87,8 +84,8 @@ export default function CheckinPage() {
     fetch("/api/checkin")
       .then((r) => r.json())
       .then((data: { events: Event[] }) => setEvents(data.events ?? []))
-      .catch(() => setError("Failed to load events."));
-  }, []);
+      .catch(() => setError(lang === "ja" ? "イベントの読み込みに失敗しました。" : "Failed to load events."));
+  }, [lang]);
 
   // Fetch presenters when event selected
   useEffect(() => {
@@ -96,13 +93,13 @@ export default function CheckinPage() {
     fetch(`/api/checkin?eventId=${selectedEvent.id}`)
       .then((r) => r.json())
       .then((data: { presenters: Presenter[] }) => setPresenters(data.presenters ?? []))
-      .catch(() => setError("Failed to load presenters."));
-  }, [selectedEvent]);
+      .catch(() => setError(lang === "ja" ? "発表者情報の読み込みに失敗しました。" : "Failed to load presenters."));
+  }, [selectedEvent, lang]);
 
-  const organizations = [...new Set(presenters.map((p) => p.organization ?? "Other"))];
+  const organizations = [...new Set(presenters.map((p) => p.organization ?? (lang === "ja" ? "その他" : "Other")))];
 
   const filteredPresenters = presenters.filter((p) => {
-    const matchOrg = !orgFilter || (p.organization ?? "Other") === orgFilter;
+    const matchOrg = !orgFilter || (p.organization ?? (lang === "ja" ? "その他" : "Other")) === orgFilter;
     const matchSearch =
       !search ||
       p.displayName.toLowerCase().includes(search.toLowerCase()) ||
@@ -120,11 +117,11 @@ export default function CheckinPage() {
       formData.append("presenterId", selectedPresenter.id);
       const res = await fetch("/api/checkin/upload", { method: "POST", body: formData });
       const data = await res.json() as { success?: boolean; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      if (!res.ok) throw new Error(data.error ?? (lang === "ja" ? "アップロードに失敗しました" : "Upload failed"));
       setUploadResult(selectedFile.name);
       setStep("complete");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed");
+      setError(e instanceof Error ? e.message : (lang === "ja" ? "アップロードに失敗しました" : "Upload failed"));
     } finally {
       setUploading(false);
     }
@@ -137,18 +134,34 @@ export default function CheckinPage() {
     return () => clearTimeout(t);
   }, [step, reset]);
 
+  const getStatusBadge = (status: string) => {
+    if (lang === "ja") {
+      switch (status) {
+        case "pending": return { label: "確認待ち", bg: "#fef3c7", fg: "#92400e" };
+        case "approved": return { label: "承認済み", bg: "#dcfce7", fg: "#166534" };
+        case "rejected": return { label: "再アップロードが必要", bg: "#fee2e2", fg: "#b91c1c" };
+      }
+    }
+    switch (status) {
+      case "pending": return { label: "Pending review", bg: "#fef3c7", fg: "#92400e" };
+      case "approved": return { label: "Approved", bg: "#dcfce7", fg: "#166534" };
+      case "rejected": return { label: "Needs a new upload", bg: "#fee2e2", fg: "#b91c1c" };
+    }
+    return { label: status, bg: "#f1f5f9", fg: "#475569" };
+  };
+
   return (
     <div style={{ minHeight: "100vh", background: "#f8fafc", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "2rem", fontFamily: "sans-serif" }}>
       
       {/* Header */}
       <div style={{ marginBottom: "2rem", textAlign: "center" }}>
-        <h1 style={{ fontSize: "2rem", fontWeight: 700, color: "#1e293b" }}>Presentation Check-in</h1>
+        <h1 style={{ fontSize: "2rem", fontWeight: 700, color: "#1e293b" }}>{t.checkinPage.title}</h1>
         <p style={{ fontSize: "1.25rem", color: "#64748b" }}>
-          {step === "select-event" && "Step 1 — Select your event"}
-          {step === "select-presenter" && "Step 2 — Select your name"}
-          {step === "confirm" && "Step 3 — Confirm your details"}
-          {step === "upload" && "Step 4 — Upload your materials"}
-          {step === "complete" && "Upload complete!"}
+          {step === "select-event" && (lang === "ja" ? "ステップ 1 — イベントを選択してください" : "Step 1 — Select your event")}
+          {step === "select-presenter" && (lang === "ja" ? "ステップ 2 — お名前を選択してください" : "Step 2 — Select your name")}
+          {step === "confirm" && (lang === "ja" ? "ステップ 3 — 登録内容を確認してください" : "Step 3 — Confirm your details")}
+          {step === "upload" && (lang === "ja" ? "ステップ 4 — 資料ファイルをアップロードしてください" : "Step 4 — Upload your materials")}
+          {step === "complete" && (lang === "ja" ? "アップロード完了！" : "Upload complete!")}
         </p>
       </div>
 
@@ -162,7 +175,9 @@ export default function CheckinPage() {
       {step === "select-event" && (
         <div style={{ width: "100%", maxWidth: "600px" }}>
           {events.length === 0 ? (
-            <p style={{ textAlign: "center", color: "#64748b", fontSize: "1.25rem" }}>No active events found. Please ask staff for assistance.</p>
+            <p style={{ textAlign: "center", color: "#64748b", fontSize: "1.25rem" }}>
+              {lang === "ja" ? "有効なイベントが見つかりません。スタッフにお声がけください。" : "No active events found. Please ask staff for assistance."}
+            </p>
           ) : (
             events.map((event) => (
               <button key={event.id} onClick={() => { setSelectedEvent(event); setStep("select-presenter"); }}
@@ -179,18 +194,18 @@ export default function CheckinPage() {
       {step === "select-presenter" && (
         <div style={{ width: "100%", maxWidth: "700px" }}>
           <div style={{ marginBottom: "1rem", display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-            <input placeholder="Search by name or organization" value={search} onChange={(e) => setSearch(e.target.value)}
+            <input placeholder={t.checkinPage.searchAttendee} value={search} onChange={(e) => setSearch(e.target.value)}
               style={{ flex: 1, padding: "0.75rem 1rem", fontSize: "1.125rem", border: "2px solid #e2e8f0", borderRadius: "8px" }} />
             <select value={orgFilter} onChange={(e) => setOrgFilter(e.target.value)}
               style={{ padding: "0.75rem 1rem", fontSize: "1.125rem", border: "2px solid #e2e8f0", borderRadius: "8px" }}>
-              <option value="">All Organizations</option>
+              <option value="">{lang === "ja" ? "すべての所属組織" : "All Organizations"}</option>
               {organizations.map((org) => <option key={org} value={org}>{org}</option>)}
             </select>
           </div>
           <div style={{ maxHeight: "60vh", overflowY: "auto" }}>
             {filteredPresenters.map((p) => {
               const latest = p.submissions[0];
-              const badge = latest ? STATUS_BADGE[latest.status] : null;
+              const badge = latest ? getStatusBadge(latest.status) : null;
               return (
                 <button key={p.id} onClick={() => { setSelectedPresenter(p); setStep("confirm"); }}
                   style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between", gap: "1rem", padding: "1.25rem", marginBottom: "0.75rem", fontSize: "1.125rem", fontWeight: 600, background: "#fff", border: "2px solid #e2e8f0", borderRadius: "12px", cursor: "pointer", textAlign: "left" }}>
@@ -206,19 +221,19 @@ export default function CheckinPage() {
                 </button>
               );
             })}
-            {filteredPresenters.length === 0 && <p style={{ textAlign: "center", color: "#64748b", fontSize: "1.125rem" }}>No presenters found. Try a different search.</p>}
+            {filteredPresenters.length === 0 && <p style={{ textAlign: "center", color: "#64748b", fontSize: "1.125rem" }}>{t.checkinPage.noAttendees}</p>}
           </div>
-          <button onClick={() => setStep("select-event")} style={{ marginTop: "1rem", padding: "0.75rem 1.5rem", fontSize: "1.125rem", background: "#f1f5f9", border: "none", borderRadius: "8px", cursor: "pointer" }}>← Back</button>
+          <button onClick={() => setStep("select-event")} style={{ marginTop: "1rem", padding: "0.75rem 1.5rem", fontSize: "1.125rem", background: "#f1f5f9", border: "none", borderRadius: "8px", cursor: "pointer" }}>← {t.actions.back}</button>
         </div>
       )}
 
       {/* Step 3 — Confirm */}
       {step === "confirm" && selectedPresenter && (
         <div style={{ width: "100%", maxWidth: "600px", background: "#fff", padding: "2rem", borderRadius: "16px", border: "2px solid #e2e8f0" }}>
-          <h2 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "1rem" }}>Please confirm your details</h2>
-          <p style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}><strong>Name:</strong> {selectedPresenter.displayName}</p>
-          {selectedPresenter.organization && <p style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}><strong>Organization:</strong> {selectedPresenter.organization}</p>}
-          {selectedPresenter.title && <p style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}><strong>Title:</strong> {selectedPresenter.title}</p>}
+          <h2 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "1rem" }}>{lang === "ja" ? "登録内容をご確認ください" : "Please confirm your details"}</h2>
+          <p style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}><strong>{lang === "ja" ? "氏名:" : "Name:"}</strong> {selectedPresenter.displayName}</p>
+          {selectedPresenter.organization && <p style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}><strong>{lang === "ja" ? "所属:" : "Organization:"}</strong> {selectedPresenter.organization}</p>}
+          {selectedPresenter.title && <p style={{ fontSize: "1.25rem", marginBottom: "0.5rem" }}><strong>{lang === "ja" ? "役職:" : "Title:"}</strong> {selectedPresenter.title}</p>}
           {selectedPresenter.presentationAssignments.map((a) => a.liveSession && (
             <p key={a.id} style={{ fontSize: "1.125rem", color: "#475569", marginBottom: "0.25rem" }}>
               📍 {a.liveSession.room?.name ?? "TBD"} — {a.liveSession.name}
@@ -231,9 +246,9 @@ export default function CheckinPage() {
             if (latest.status === "approved") {
               return (
                 <div style={{ marginTop: "1rem", padding: "1rem", background: "#dcfce7", border: "2px solid #86efac", borderRadius: "12px", color: "#166534" }}>
-                  <strong>Your presentation has already been approved.</strong>
+                  <strong>{lang === "ja" ? "発表資料は既に承認されています。" : "Your presentation has already been approved."}</strong>
                   <p style={{ marginTop: "0.25rem", fontSize: "1rem" }}>
-                    If you need to make changes, please see conference staff.
+                    {lang === "ja" ? "変更が必要な場合はスタッフにお問い合わせください。" : "If you need to make changes, please see conference staff."}
                   </p>
                 </div>
               );
@@ -241,16 +256,15 @@ export default function CheckinPage() {
             if (latest.status === "rejected") {
               return (
                 <div style={{ marginTop: "1rem", padding: "1rem", background: "#fee2e2", border: "2px solid #fca5a5", borderRadius: "12px", color: "#b91c1c" }}>
-                  <strong>Your previous upload needs a correction.</strong>
-                  {latest.reviewNote && <p style={{ marginTop: "0.25rem", fontSize: "1rem" }}>Reason: {latest.reviewNote}</p>}
-                  <p style={{ marginTop: "0.25rem", fontSize: "1rem" }}>Please upload a corrected file below.</p>
+                  <strong>{lang === "ja" ? "前回のアップロードに修正が必要です。" : "Your previous upload needs a correction."}</strong>
+                  {latest.reviewNote && <p style={{ marginTop: "0.25rem", fontSize: "1rem" }}>{lang === "ja" ? "理由: " : "Reason: "}{latest.reviewNote}</p>}
+                  <p style={{ marginTop: "0.25rem", fontSize: "1rem" }}>{lang === "ja" ? "下記より修正済みファイルをアップロードしてください。" : "Please upload a corrected file below."}</p>
                 </div>
               );
             }
             return (
               <div style={{ marginTop: "1rem", padding: "1rem", background: "#fef3c7", border: "2px solid #fcd34d", borderRadius: "12px", color: "#92400e" }}>
-                You already uploaded <strong>{latest.fileName ?? "a file"}</strong>, still awaiting review.
-                Uploading a new file below will replace it.
+                {lang === "ja" ? "既に " : "You already uploaded "}<strong>{latest.fileName ?? (lang === "ja" ? "ファイル" : "a file")}</strong>{lang === "ja" ? " をアップロード済みで確認待ちです。再アップロードすると置き換わります。" : ", still awaiting review. Uploading a new file below will replace it."}
               </div>
             );
           })()}
@@ -258,17 +272,17 @@ export default function CheckinPage() {
             {selectedPresenter.submissions[0]?.status === "approved" ? (
               <button onClick={() => setStep("select-presenter")}
                 style={{ flex: 1, padding: "1rem", fontSize: "1.25rem", fontWeight: 700, background: "#f1f5f9", color: "#1e293b", border: "none", borderRadius: "12px", cursor: "pointer", minHeight: "64px" }}>
-                ← Back to search
+                ← {lang === "ja" ? "検索に戻る" : "Back to search"}
               </button>
             ) : (
               <button onClick={() => setStep("upload")}
                 style={{ flex: 1, padding: "1rem", fontSize: "1.25rem", fontWeight: 700, background: "#2563eb", color: "#fff", border: "none", borderRadius: "12px", cursor: "pointer", minHeight: "64px" }}>
-                ✓ Yes, this is me
+                ✓ {lang === "ja" ? "はい、本人です" : "Yes, this is me"}
               </button>
             )}
             <button onClick={() => setStep("select-presenter")}
               style={{ padding: "1rem 1.5rem", fontSize: "1.125rem", background: "#f1f5f9", border: "none", borderRadius: "12px", cursor: "pointer" }}>
-              ← Back
+              ← {t.actions.back}
             </button>
           </div>
         </div>
@@ -278,21 +292,23 @@ export default function CheckinPage() {
       {step === "upload" && (
         <div style={{ width: "100%", maxWidth: "600px", background: "#fff", padding: "2rem", borderRadius: "16px", border: "2px solid #e2e8f0" }}>
           <h2 style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "1rem" }}>
-            {selectedPresenter?.submissions[0]?.status === "rejected" ? "Upload your corrected file" : "Select your presentation file"}
+            {selectedPresenter?.submissions[0]?.status === "rejected" ? (lang === "ja" ? "修正済みファイルをアップロード" : "Upload your corrected file") : (lang === "ja" ? "プレゼンテーションファイルを選択" : "Select your presentation file")}
           </h2>
-          <p style={{ fontSize: "1.125rem", color: "#64748b", marginBottom: "1.5rem" }}>Accepted formats: .pptx, .pdf. Maximum size: 200MB.</p>
+          <p style={{ fontSize: "1.125rem", color: "#64748b", marginBottom: "1.5rem" }}>
+            {lang === "ja" ? "利用可能形式: .pptx, .pdf / 最大サイズ: 200MB" : "Accepted formats: .pptx, .pdf. Maximum size: 200MB."}
+          </p>
           <input type="file" accept=".pptx,.pdf,.ppt"
             onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
             style={{ display: "block", width: "100%", padding: "1rem", fontSize: "1.125rem", border: "2px dashed #cbd5e1", borderRadius: "12px", marginBottom: "1.5rem", cursor: "pointer" }} />
-          {selectedFile && <p style={{ fontSize: "1.125rem", color: "#475569", marginBottom: "1rem" }}>Selected: <strong>{selectedFile.name}</strong> ({(selectedFile.size / (1024 * 1024)).toFixed(1)} MB)</p>}
+          {selectedFile && <p style={{ fontSize: "1.125rem", color: "#475569", marginBottom: "1rem" }}>{lang === "ja" ? "選択済み: " : "Selected: "}<strong>{selectedFile.name}</strong> ({(selectedFile.size / (1024 * 1024)).toFixed(1)} MB)</p>}
           <div style={{ display: "flex", gap: "1rem" }}>
             <button onClick={handleUpload} disabled={!selectedFile || uploading}
               style={{ flex: 1, padding: "1rem", fontSize: "1.25rem", fontWeight: 700, background: selectedFile && !uploading ? "#16a34a" : "#94a3b8", color: "#fff", border: "none", borderRadius: "12px", cursor: selectedFile && !uploading ? "pointer" : "not-allowed", minHeight: "64px" }}>
-              {uploading ? "Uploading..." : "⬆ Upload File"}
+              {uploading ? (lang === "ja" ? "アップロード中..." : "Uploading...") : (lang === "ja" ? "⬆ ファイルを送信" : "⬆ Upload File")}
             </button>
             <button onClick={() => setStep("confirm")} disabled={uploading}
               style={{ padding: "1rem 1.5rem", fontSize: "1.125rem", background: "#f1f5f9", border: "none", borderRadius: "12px", cursor: "pointer" }}>
-              ← Back
+              ← {t.actions.back}
             </button>
           </div>
         </div>
@@ -302,9 +318,9 @@ export default function CheckinPage() {
       {step === "complete" && (
         <div style={{ textAlign: "center", maxWidth: "600px" }}>
           <div style={{ fontSize: "5rem", marginBottom: "1rem" }}>✅</div>
-          <h2 style={{ fontSize: "2rem", fontWeight: 700, color: "#16a34a", marginBottom: "1rem" }}>Upload Successful!</h2>
-          <p style={{ fontSize: "1.25rem", color: "#475569", marginBottom: "0.5rem" }}><strong>{uploadResult}</strong> has been received.</p>
-          <p style={{ fontSize: "1.125rem", color: "#64748b" }}>This screen will reset in 5 seconds.</p>
+          <h2 style={{ fontSize: "2rem", fontWeight: 700, color: "#16a34a", marginBottom: "1rem" }}>{lang === "ja" ? "送信が完了しました！" : "Upload Successful!"}</h2>
+          <p style={{ fontSize: "1.25rem", color: "#475569", marginBottom: "0.5rem" }}><strong>{uploadResult}</strong> {lang === "ja" ? "を受領しました。" : "has been received."}</p>
+          <p style={{ fontSize: "1.125rem", color: "#64748b" }}>{lang === "ja" ? "画面は 5 秒後にリセットされます。" : "This screen will reset in 5 seconds."}</p>
         </div>
       )}
     </div>

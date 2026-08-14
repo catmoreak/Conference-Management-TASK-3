@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "~/trpc/react";
 import { useAuth } from "~/app/_components/AuthProvider";
+import { useLanguage } from "~/app/_components/LanguageContext";
 
 interface SessionFile {
   id: string;
@@ -24,10 +25,6 @@ function formatBytes(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// PowerPoint files can't be rendered natively by the browser -- clicking a
-// raw .pptx URL just downloads it. Route those through Microsoft's Office
-// Online viewer so they open inline instead. PDFs render natively, so they
-// go straight to the raw URL.
 function getPreviewUrl(file: SessionFile): string | null {
   if (!file.publicUrl) return null;
   const name = file.fileName?.toLowerCase() ?? "";
@@ -44,6 +41,8 @@ function getPreviewUrl(file: SessionFile): string | null {
 
 export default function SessionFilesPage() {
   const { user } = useAuth();
+  const { lang, t } = useLanguage();
+
   const [eventId, setEventId] = useState("");
   const [liveSessionId, setLiveSessionId] = useState("");
   const [files, setFiles] = useState<SessionFile[]>([]);
@@ -61,10 +60,6 @@ export default function SessionFilesPage() {
     { enabled: !!eventId },
   );
 
-  // Simplify the common case: most events only need one file list, so
-  // auto-select the first live session (created automatically when the
-  // event was made) instead of forcing a second manual picker. A dropdown
-  // only appears if an event genuinely has more than one session.
   useEffect(() => {
     if (!eventId) {
       setLiveSessionId("");
@@ -97,14 +92,14 @@ export default function SessionFilesPage() {
         headers: { "Content-Type": "application/json" },
       });
       const data = (await res.json()) as { files?: SessionFile[]; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Failed to load files");
+      if (!res.ok) throw new Error(data.error ?? (lang === "ja" ? "ファイルの読み込みに失敗しました" : "Failed to load files"));
       setFiles(data.files ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load files");
+      setError(err instanceof Error ? err.message : (lang === "ja" ? "ファイルの読み込みに失敗しました" : "Failed to load files"));
     } finally {
       setLoading(false);
     }
-  }, [liveSessionId]);
+  }, [liveSessionId, lang]);
 
   useEffect(() => {
     void fetchFiles();
@@ -124,10 +119,10 @@ export default function SessionFilesPage() {
         body: formData,
       });
       const data = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Upload failed");
+      if (!res.ok) throw new Error(data.error ?? (lang === "ja" ? "アップロードに失敗しました" : "Upload failed"));
       await fetchFiles();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
+      setError(err instanceof Error ? err.message : (lang === "ja" ? "アップロードに失敗しました" : "Upload failed"));
     } finally {
       setUploading(false);
     }
@@ -144,26 +139,26 @@ export default function SessionFilesPage() {
         body: JSON.stringify({ coverText: coverText.trim() }),
       });
       const data = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Failed to add cover slide");
+      if (!res.ok) throw new Error(data.error ?? (lang === "ja" ? "カバースライドの追加に失敗しました" : "Failed to add cover slide"));
       setCoverText("");
       await fetchFiles();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add cover slide");
+      setError(err instanceof Error ? err.message : (lang === "ja" ? "カバースライドの追加に失敗しました" : "Failed to add cover slide"));
     } finally {
       setAddingCover(false);
     }
   }
 
   async function handleDelete(fileId: string) {
-    if (!confirm("Delete this file? This cannot be undone.")) return;
+    if (!confirm(t.filesPage.deleteConfirm)) return;
     setError("");
     try {
       const res = await fetch(`/api/live-sessions/${liveSessionId}/files/${fileId}`, { method: "DELETE" });
       const data = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Delete failed");
+      if (!res.ok) throw new Error(data.error ?? (lang === "ja" ? "削除に失敗しました" : "Delete failed"));
       await fetchFiles();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Delete failed");
+      setError(err instanceof Error ? err.message : (lang === "ja" ? "削除に失敗しました" : "Delete failed"));
     }
   }
 
@@ -179,11 +174,11 @@ export default function SessionFilesPage() {
         ),
       });
       const data = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Rename failed");
+      if (!res.ok) throw new Error(data.error ?? (lang === "ja" ? "名前の変更に失敗しました" : "Rename failed"));
       setRenamingId(null);
       await fetchFiles();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Rename failed");
+      setError(err instanceof Error ? err.message : (lang === "ja" ? "名前の変更に失敗しました" : "Rename failed"));
     }
   }
 
@@ -197,10 +192,10 @@ export default function SessionFilesPage() {
       });
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        throw new Error(data.error ?? "Reorder failed");
+        throw new Error(data.error ?? (lang === "ja" ? "順序変更に失敗しました" : "Reorder failed"));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Reorder failed");
+      setError(err instanceof Error ? err.message : (lang === "ja" ? "順序変更に失敗しました" : "Reorder failed"));
       await fetchFiles();
     }
   }
@@ -219,10 +214,9 @@ export default function SessionFilesPage() {
     <div className="flex-1 bg-[#F8FAFC] text-text-secondary p-8">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-[#0B1220] tracking-tight">Presentation Files</h1>
+          <h1 className="text-2xl font-bold text-[#0B1220] tracking-tight">{t.filesPage.title}</h1>
           <p className="text-gray-500 text-xs mt-1">
-            Upload, rename, delete and reorder the PowerPoint/PDF files for an event. This list is shared
-            live with the podium display app.
+            {t.filesPage.subTitle}
           </p>
         </div>
 
@@ -230,7 +224,7 @@ export default function SessionFilesPage() {
           <div className={`grid grid-cols-1 gap-4 ${(sessions ?? []).length > 1 ? "sm:grid-cols-2" : ""}`}>
             <div>
               <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2" htmlFor="ev-select">
-                Event
+                {lang === "ja" ? "イベント" : "Event"}
               </label>
               <select
                 id="ev-select"
@@ -241,7 +235,7 @@ export default function SessionFilesPage() {
                 }}
                 className="w-full bg-white border border-gray-200 text-text-primary text-sm rounded-xl px-3 py-2.5 focus:border-[#0B1220] focus:ring-2 focus:ring-[#0B1220]/10 outline-none transition"
               >
-                <option value="">— Select an event —</option>
+                <option value="">{lang === "ja" ? "— イベントを選択 —" : "— Select an event —"}</option>
                 {(events ?? []).map((ev) => (
                   <option key={ev.id} value={ev.id}>
                     {ev.name}
@@ -252,7 +246,7 @@ export default function SessionFilesPage() {
             {(sessions ?? []).length > 1 && (
               <div>
                 <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2" htmlFor="ls-select">
-                  Session
+                  {lang === "ja" ? "セッション" : "Session"}
                 </label>
                 <select
                   id="ls-select"
@@ -272,7 +266,7 @@ export default function SessionFilesPage() {
 
           {canUpload && liveSessionId && (
             <div>
-              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Add a file</label>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">{lang === "ja" ? "ファイルを追加" : "Add a file"}</label>
               <input
                 type="file"
                 accept=".pptx,.pptm,.ppt,.pdf"
@@ -280,25 +274,24 @@ export default function SessionFilesPage() {
                 onChange={(e) => void handleUpload(e)}
                 className="w-full bg-white border border-gray-200 text-text-primary text-sm rounded-xl px-3 py-2.5 transition focus:border-[#0B1220]"
               />
-              {uploading && <p className="text-xs text-text-secondary mt-1">Uploading…</p>}
+              {uploading && <p className="text-xs text-text-secondary mt-1">{t.filesPage.uploading}</p>}
             </div>
           )}
 
           {canUpload && liveSessionId && (
             <div>
               <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">
-                Add a cover slide
+                {t.filesPage.addCoverSlide}
               </label>
               <p className="text-[11px] text-gray-400 mb-2">
-                A plain text screen (e.g. the event name) you can drop between files to keep the projector lit
-                during a gap.
+                {lang === "ja" ? "セッション合間にプロジェクター画面へ表示するテキストスライドを追加できます。" : "A plain text screen (e.g. the event name) you can drop between files to keep the projector lit during a gap."}
               </p>
               <div className="flex gap-2">
                 <input
                   type="text"
                   value={coverText}
                   onChange={(e) => setCoverText(e.target.value)}
-                  placeholder="e.g. this event's name"
+                  placeholder={t.filesPage.coverPlaceholder}
                   disabled={addingCover}
                   maxLength={200}
                   className="flex-1 bg-white border border-gray-200 text-text-primary text-sm rounded-xl px-3 py-2.5 focus:border-[#0B1220] focus:ring-2 focus:ring-[#0B1220]/10 outline-none transition"
@@ -309,7 +302,7 @@ export default function SessionFilesPage() {
                   onClick={() => void handleAddCover()}
                   className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-[#0B1220] hover:bg-[#1A253C] text-white transition shadow-sm disabled:opacity-50 whitespace-nowrap"
                 >
-                  {addingCover ? "Adding…" : "Add cover"}
+                  {addingCover ? (lang === "ja" ? "追加中…" : "Adding…") : t.filesPage.addCoverBtn}
                 </button>
               </div>
             </div>
@@ -328,27 +321,31 @@ export default function SessionFilesPage() {
             <svg className="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 016 3.75h3.879a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18A2.25 2.25 0 0120.25 9v.776" />
             </svg>
-            <span className="text-sm font-semibold text-gray-400">Select an event above to view and upload its files.</span>
+            <span className="text-sm font-semibold text-gray-400">
+              {lang === "ja" ? "ファイルを表示およびアップロードするには、上部でイベントを選択してください。" : "Select an event above to view and upload its files."}
+            </span>
           </div>
         ) : loading ? (
-          <p className="text-gray-400 text-sm font-semibold">Loading files…</p>
+          <p className="text-gray-400 text-sm font-semibold">{lang === "ja" ? "ファイルを読み込み中…" : "Loading files…"}</p>
         ) : files.length === 0 ? (
           <div className="bg-white border border-gray-200 rounded-xl p-12 text-center shadow-sm flex flex-col items-center justify-center">
             <svg className="w-12 h-12 text-gray-300 mb-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
             </svg>
-            <span className="text-sm font-semibold text-gray-400">No files uploaded for this event yet.</span>
+            <span className="text-sm font-semibold text-gray-400">
+              {lang === "ja" ? "このイベントにはまだファイルがアップロードされていません。" : "No files uploaded for this event yet."}
+            </span>
           </div>
         ) : (
           <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-gray-400 text-[10px] font-bold uppercase tracking-wider">
-                  <th className="px-6 py-3.5">Order</th>
-                  <th className="px-6 py-3.5">File</th>
-                  <th className="px-6 py-3.5">Size</th>
-                  <th className="px-6 py-3.5">Uploaded by</th>
-                  <th className="px-6 py-3.5 text-right">Actions</th>
+                  <th className="px-6 py-3.5">{lang === "ja" ? "順序" : "Order"}</th>
+                  <th className="px-6 py-3.5">{t.filesPage.tableHeaderFile}</th>
+                  <th className="px-6 py-3.5">{t.filesPage.tableHeaderSize}</th>
+                  <th className="px-6 py-3.5">{t.filesPage.tableHeaderUploadedBy}</th>
+                  <th className="px-6 py-3.5 text-right">{t.filesPage.tableHeaderActions}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-xs">
@@ -393,26 +390,26 @@ export default function SessionFilesPage() {
                             onClick={() => void handleRenameSubmit(f)}
                             className="text-xs text-[#0B1220] font-bold hover:underline"
                           >
-                            Save
+                            {t.actions.save}
                           </button>
                           <button
                             type="button"
                             onClick={() => setRenamingId(null)}
                             className="text-xs text-gray-500 font-semibold hover:underline"
                           >
-                            Cancel
+                            {t.actions.cancel}
                           </button>
                         </div>
                       ) : f.itemType === "cover" ? (
                         <div className="font-bold text-[#0B1220]">
                           <span className="inline-block px-1.5 py-0.5 mr-1.5 rounded text-[9px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-600 border border-indigo-200">
-                            Cover
+                            {t.filesPage.coverSlide}
                           </span>
-                          {f.coverText ?? "Untitled"}
+                          {f.coverText ?? (lang === "ja" ? "無題" : "Untitled")}
                         </div>
                       ) : (
                         <div className="font-bold text-[#0B1220]">
-                          {f.fileName ?? "Untitled"}
+                          {f.fileName ?? (lang === "ja" ? "無題" : "Untitled")}
                           {f.presenter && (
                             <span className="block text-[10px] text-gray-400 font-semibold mt-0.5">{f.presenter.displayName}</span>
                           )}
@@ -434,7 +431,7 @@ export default function SessionFilesPage() {
                           rel="noreferrer"
                           className="text-xs text-[#10B981] font-bold hover:underline"
                         >
-                          View
+                          {t.actions.view}
                         </a>
                       )}
                       {canRename && renamingId !== f.id && (
@@ -446,7 +443,7 @@ export default function SessionFilesPage() {
                           }}
                           className="text-xs text-gray-600 font-semibold hover:underline"
                         >
-                          Rename
+                          {t.actions.rename}
                         </button>
                       )}
                       {canDelete && (
@@ -455,7 +452,7 @@ export default function SessionFilesPage() {
                           onClick={() => void handleDelete(f.id)}
                           className="text-xs text-red-500 font-bold hover:underline"
                         >
-                          Delete
+                          {t.actions.delete}
                         </button>
                       )}
                     </td>

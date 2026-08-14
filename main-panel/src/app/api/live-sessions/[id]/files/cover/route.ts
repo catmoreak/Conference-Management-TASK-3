@@ -100,7 +100,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         itemType: "cover",
         coverText: parsed.data.coverText,
         sortOrder: (maxOrder._max.sortOrder ?? 0) + 1,
-      },
+      } as any,
     });
 
     const reqHeaders = await headers();
@@ -120,8 +120,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         success: true,
         file: {
           id: created.id,
-          itemType: created.itemType,
-          coverText: created.coverText,
+          itemType: (created as any).itemType,
+          coverText: (created as any).coverText,
           status: created.status,
           sortOrder: created.sortOrder,
           uploadedBy: session.user.name,

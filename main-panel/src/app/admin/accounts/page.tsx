@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "~/app/_components/AuthProvider";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "~/app/_components/LanguageContext";
 
 interface Account {
   id: string;
@@ -20,6 +21,8 @@ interface Account {
 export default function AdminAccountsPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const { lang, t } = useLanguage();
+
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -55,7 +58,7 @@ export default function AdminAccountsPage() {
       setAccounts(data);
     } catch (err: unknown) {
       console.error(err);
-      setError("Failed to load user accounts.");
+      setError(lang === "ja" ? "ユーザーアカウントの読み込みに失敗しました。" : "Failed to load user accounts.");
     } finally {
       setLoading(false);
     }
@@ -82,10 +85,9 @@ export default function AdminAccountsPage() {
 
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        throw new Error(data.error ?? "Failed to create account.");
+        throw new Error(data.error ?? (lang === "ja" ? "アカウント作成に失敗しました。" : "Failed to create account."));
       }
 
-      // Reset form
       setName("");
       setEmail("");
       setPassword("");
@@ -94,7 +96,7 @@ export default function AdminAccountsPage() {
       await fetchAccounts();
     } catch (err: unknown) {
       console.error(err);
-      setError(err instanceof Error ? err.message : "Creation failed.");
+      setError(err instanceof Error ? err.message : (lang === "ja" ? "作成に失敗しました。" : "Creation failed."));
     } finally {
       setSubmitting(false);
     }
@@ -115,13 +117,13 @@ export default function AdminAccountsPage() {
 
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        throw new Error(data.error ?? "Operation failed.");
+        throw new Error(data.error ?? (lang === "ja" ? "操作に失敗しました。" : "Operation failed."));
       }
 
       await fetchAccounts();
     } catch (err: unknown) {
       console.error(err);
-      setError(err instanceof Error ? err.message : "Status update failed.");
+      setError(err instanceof Error ? err.message : (lang === "ja" ? "ステータス更新に失敗しました。" : "Status update failed."));
     }
   };
 
@@ -140,18 +142,18 @@ export default function AdminAccountsPage() {
 
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        throw new Error(data.error ?? "Role change failed.");
+        throw new Error(data.error ?? (lang === "ja" ? "ロール変更に失敗しました。" : "Role change failed."));
       }
 
       await fetchAccounts();
     } catch (err: unknown) {
       console.error(err);
-      setError(err instanceof Error ? err.message : "Role update failed.");
+      setError(err instanceof Error ? err.message : (lang === "ja" ? "ロール更新に失敗しました。" : "Role update failed."));
     }
   };
 
   const handleMfaReset = async (userId: string) => {
-    if (!confirm("Are you sure you want to reset this user's Multi-Factor status? They will be signed out and forced to re-enroll.")) {
+    if (!confirm(lang === "ja" ? "このユーザーの2段階認証をリセットしますか？ユーザーはサインアウトされ再設定が必要になります。" : "Are you sure you want to reset this user's Multi-Factor status? They will be signed out and forced to re-enroll.")) {
       return;
     }
     setError("");
@@ -167,21 +169,21 @@ export default function AdminAccountsPage() {
 
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        throw new Error(data.error ?? "MFA reset failed.");
+        throw new Error(data.error ?? (lang === "ja" ? "MFAリセットに失敗しました。" : "MFA reset failed."));
       }
 
-      alert("Multi-Factor Authentication has been reset successfully.");
+      alert(lang === "ja" ? "2段階認証が正常にリセットされました。" : "Multi-Factor Authentication has been reset successfully.");
       await fetchAccounts();
     } catch (err: unknown) {
       console.error(err);
-      setError(err instanceof Error ? err.message : "MFA reset failed.");
+      setError(err instanceof Error ? err.message : (lang === "ja" ? "MFAリセットに失敗しました。" : "MFA reset failed."));
     }
   };
 
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-bg-primary text-text-primary">
-        <p className="text-lg">Retrieving accounts list...</p>
+        <p className="text-lg">{lang === "ja" ? "アカウント一覧を取得中..." : "Retrieving accounts list..."}</p>
       </div>
     );
   }
@@ -191,14 +193,14 @@ export default function AdminAccountsPage() {
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">Account Management</h1>
-            <p className="text-text-secondary text-sm mt-1">Manage conference users, assignments, and authorization scopes</p>
+            <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">{t.accountsPage.title}</h1>
+            <p className="text-text-secondary text-sm mt-1">{t.accountsPage.subTitle}</p>
           </div>
           <button
             onClick={() => setIsOpen(true)}
             className="bg-accent-blue hover:bg-accent-blue/90 text-white font-semibold px-4 py-2.5 rounded-lg text-sm transition shadow-hard hover:shadow-hard-hover active:translate-x-0.5 active:translate-y-0.5 hover:-translate-x-0.5 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent-blue"
           >
-            Create User Account
+            {t.accountsPage.createUser}
           </button>
         </div>
 
@@ -214,12 +216,12 @@ export default function AdminAccountsPage() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-white border-b border-border-soft text-text-secondary text-xs font-semibold uppercase tracking-wider">
-                  <th className="px-6 py-4">Name / Email</th>
-                  <th className="px-6 py-4">Tenant Scope</th>
-                  <th className="px-6 py-4">Role</th>
-                  <th className="px-6 py-4">MFA State</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Actions</th>
+                  <th className="px-6 py-4">{t.accountsPage.name} / {t.accountsPage.email}</th>
+                  <th className="px-6 py-4">{lang === "ja" ? "テナント範囲" : "Tenant Scope"}</th>
+                  <th className="px-6 py-4">{t.accountsPage.role}</th>
+                  <th className="px-6 py-4">{t.accountsPage.twoFactor}</th>
+                  <th className="px-6 py-4">{t.accountsPage.status}</th>
+                  <th className="px-6 py-4 text-right">{t.actions.actions}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-soft text-sm">
@@ -229,11 +231,11 @@ export default function AdminAccountsPage() {
                       <div className="font-semibold text-text-primary">{acc.name}</div>
                       <div className="text-xs text-text-secondary mt-0.5">{acc.email}</div>
                       {acc.lastLogin && (
-                        <div className="text-[10px] text-text-muted mt-1">Last seen: {new Date(acc.lastLogin).toLocaleString()}</div>
+                        <div className="text-[10px] text-text-muted mt-1">{lang === "ja" ? "最終確認:" : "Last seen:"} {new Date(acc.lastLogin).toLocaleString()}</div>
                       )}
                     </td>
                     <td className="px-6 py-4 font-mono text-xs text-text-primary">
-                      {acc.tenantId ?? <span className="text-text-muted">global</span>}
+                      {acc.tenantId ?? <span className="text-text-muted">{lang === "ja" ? "グローバル" : "global"}</span>}
                     </td>
                     <td className="px-6 py-4">
                       <select
@@ -243,9 +245,9 @@ export default function AdminAccountsPage() {
                         disabled={acc.id === user?.id}
                         className="bg-white border border-border-soft hover:border-accent-slate text-text-primary text-xs rounded-lg px-2.5 py-1.5 transition focus:outline-none focus:ring-1 focus:ring-accent-blue"
                       >
-                        <option value="admin">Administrator</option>
-                        <option value="reviewer">Reviewer</option>
-                        <option value="presenter">Presenter</option>
+                        <option value="admin">{t.roles.admin}</option>
+                        <option value="reviewer">{t.roles.reviewer}</option>
+                        <option value="presenter">{t.roles.presenter}</option>
                       </select>
                     </td>
                     <td className="px-6 py-4">
@@ -257,14 +259,14 @@ export default function AdminAccountsPage() {
                           aria-hidden="true"
                         ></span>
                         <span className="text-xs text-text-primary">
-                          {acc.twoFactorEnabled ? "Enrolled" : "Not Enrolled"}
+                          {acc.twoFactorEnabled ? (lang === "ja" ? "設定済み" : "Enrolled") : (lang === "ja" ? "未設定" : "Not Enrolled")}
                         </span>
                         {acc.twoFactorEnabled && (
                           <button
                             onClick={() => void handleMfaReset(acc.id)}
                             className="text-xs text-error hover:text-error/80 underline focus:outline-none ml-2"
                           >
-                            Reset
+                            {lang === "ja" ? "リセット" : "Reset"}
                           </button>
                         )}
                       </div>
@@ -275,7 +277,7 @@ export default function AdminAccountsPage() {
                           acc.status === "active" ? "bg-success/10 text-success border border-success/30" : "bg-error/10 text-error border border-error/30"
                         }`}
                       >
-                        {acc.status}
+                        {acc.status === "active" ? t.accountsPage.active : t.accountsPage.suspended}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
@@ -288,7 +290,7 @@ export default function AdminAccountsPage() {
                               : "bg-success/10 hover:bg-success/20 text-success border border-success/30 focus:ring-success"
                           }`}
                         >
-                          {acc.status === "active" ? "Suspend" : "Unsuspend"}
+                          {acc.status === "active" ? t.accountsPage.suspend : t.accountsPage.unsuspend}
                         </button>
                       )}
                     </td>
@@ -304,11 +306,11 @@ export default function AdminAccountsPage() {
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-text-primary/40 backdrop-blur-sm" role="dialog" aria-modal="true">
           <div className="bg-bg-secondary border border-border-soft w-full max-w-md rounded-xl p-6 shadow-hard-lg">
-            <h2 className="text-xl font-bold text-text-primary mb-6">Create New Account</h2>
+            <h2 className="text-xl font-bold text-text-primary mb-6">{t.accountsPage.modalTitle}</h2>
             <form onSubmit={handleCreateAccount} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="new-name">
-                  Full Name
+                  {t.accountsPage.modalNameLabel}
                 </label>
                 <input
                   id="new-name"
@@ -322,7 +324,7 @@ export default function AdminAccountsPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="new-email">
-                  Email Address
+                  {t.accountsPage.modalEmailLabel}
                 </label>
                 <input
                   id="new-email"
@@ -336,7 +338,7 @@ export default function AdminAccountsPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="new-pwd">
-                  Temporary Password
+                  {t.accountsPage.modalPasswordLabel}
                 </label>
                 <input
                   id="new-pwd"
@@ -350,7 +352,7 @@ export default function AdminAccountsPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="new-tenant">
-                  Tenant Scope (UUID)
+                  {lang === "ja" ? "テナントID (任意)" : "Tenant Scope (UUID)"}
                 </label>
                 <input
                   id="new-tenant"
@@ -365,7 +367,7 @@ export default function AdminAccountsPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="new-role">
-                  Authorization Role
+                  {t.accountsPage.modalRoleLabel}
                 </label>
                 <select
                   id="new-role"
@@ -373,9 +375,9 @@ export default function AdminAccountsPage() {
                   onChange={(e) => setRoleSelection(e.target.value as "admin" | "reviewer" | "presenter")}
                   className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 transition focus:ring-2 focus:ring-accent-blue outline-none"
                 >
-                  <option value="admin">Administrator</option>
-                  <option value="reviewer">Reviewer</option>
-                  <option value="presenter">Presenter</option>
+                  <option value="admin">{t.roles.admin}</option>
+                  <option value="reviewer">{t.roles.reviewer}</option>
+                  <option value="presenter">{t.roles.presenter}</option>
                 </select>
               </div>
 
@@ -385,14 +387,14 @@ export default function AdminAccountsPage() {
                   onClick={() => setIsOpen(false)}
                   className="bg-transparent hover:bg-bg-primary text-text-secondary hover:text-text-primary border border-border-soft px-4 py-2 rounded-lg text-sm transition shadow-hard-sm"
                 >
-                  Cancel
+                  {t.actions.cancel}
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
                   className="bg-accent-blue hover:bg-accent-blue/90 text-white px-4 py-2 rounded-lg text-sm transition disabled:opacity-50 shadow-hard hover:shadow-hard-hover active:translate-x-0.5 active:translate-y-0.5 hover:-translate-x-0.5 hover:-translate-y-0.5"
                 >
-                  {submitting ? "Creating..." : "Create Account"}
+                  {submitting ? (lang === "ja" ? "作成中..." : "Creating...") : t.accountsPage.createUser}
                 </button>
               </div>
             </form>
