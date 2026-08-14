@@ -53,7 +53,11 @@ export default function PresOpsDashboard() {
       return;
     }
 
-    const wsUrl = `${env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:4001"}?liveSessionId=${liveSessionId}`;
+    const defaultWsHost =
+      typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1"
+        ? window.location.hostname
+        : "localhost";
+    const wsUrl = `${env.NEXT_PUBLIC_WS_URL ?? `ws://${defaultWsHost}:4001`}?liveSessionId=${liveSessionId}`;
     const socket = new WebSocket(wsUrl);
     socketRef.current = socket;
 

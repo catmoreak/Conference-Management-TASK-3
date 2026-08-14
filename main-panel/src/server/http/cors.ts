@@ -1,18 +1,52 @@
+import os from "node:os";
+
 /**
  * Shared cross-origin allowlist helper for routes podium (a separate
- * app/origin) calls directly. Local dev origins (localhost:5173/3000/3001)
- * are only included outside production -- a production build must not
- * silently accept requests claiming to be a developer's local machine.
+ * app/origin) calls directly. Local dev origins (localhost, LAN IPs, and
+ * this machine's hostname) are only included outside production -- a
+ * production build must not silently accept requests claiming to be a
+ * developer's local machine.
  */
 
-const DEV_ORIGINS = [
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-  "http://localhost:3000",
-  "http://127.0.0.1:3000",
-  "http://localhost:3001",
-  "http://127.0.0.1:3001",
-];
+const DEV_PORTS = [3000, 3001, 5173];
+
+export function getLocalDevOrigins(): string[] {
+  const origins = new Set<string>();
+
+  const addOrigin = (host: string, port: number): void => {
+    if (!host) return;
+    const normalizedHost = host.includes(":") && !host.startsWith("[") && !host.startsWith("http")
+      ? `[${host}]`
+      : host;
+    origins.add(`http://${normalizedHost}:${port}`);
+  };
+
+  for (const port of DEV_PORTS) {
+    addOrigin("localhost", port);
+    addOrigin("127.0.0.1", port);
+    addOrigin("0.0.0.0", port);
+    addOrigin("::1", port);
+
+    const hostName = os.hostname();
+    if (hostName) {
+      const candidateNames = [hostName, hostName.toLowerCase(), hostName.toUpperCase()];
+      for (const candidate of candidateNames) {
+        addOrigin(candidate, port);
+      }
+    }
+  }
+
+  for (const [_, addresses] of Object.entries(os.networkInterfaces())) {
+    for (const info of addresses ?? []) {
+      if (!info || info.family !== "IPv4" || info.internal) continue;
+      for (const port of DEV_PORTS) {
+        addOrigin(info.address, port);
+      }
+    }
+  }
+
+  return Array.from(origins);
+}
 
 export function getOriginFromUrl(urlValue: string | null | undefined): string | null {
   if (!urlValue) return null;
@@ -30,7 +64,7 @@ export function getOriginFromUrl(urlValue: string | null | undefined): string | 
  * NODE_ENV !== "production".
  */
 export function buildAllowedOrigins(...extraUrls: (string | null | undefined)[]): Set<string> {
-  const urls = process.env.NODE_ENV === "production" ? extraUrls : [...extraUrls, ...DEV_ORIGINS];
+  const urls = process.env.NODE_ENV === "production" ? extraUrls : [...extraUrls, ...getLocalDevOrigins()];
   return new Set(
     urls.map(getOriginFromUrl).filter((origin): origin is string => origin !== null),
   );

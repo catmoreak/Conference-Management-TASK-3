@@ -6,6 +6,33 @@
  * that sit outside Better Auth's handler.
  */
 
+import { getLocalDevOrigins } from "~/server/http/cors";
+
+function isAllowedLocalDevOrigin(origin: string, requestUrl: URL): boolean {
+  if (process.env.NODE_ENV === "production") {
+    return false;
+  }
+
+  const allowedOrigins = new Set(getLocalDevOrigins());
+  const normalizedOrigin = origin.trim().toLowerCase();
+  if (allowedOrigins.has(normalizedOrigin)) {
+    return true;
+  }
+
+  const requestOrigin = requestUrl.origin.toLowerCase();
+  const requestHost = requestUrl.hostname.toLowerCase();
+
+  try {
+    const originUrl = new URL(origin);
+    const sameHost = originUrl.hostname.toLowerCase() === requestHost;
+    const samePort = originUrl.port === requestUrl.port;
+    const sameMachineAlias = sameHost && samePort && requestOrigin !== normalizedOrigin;
+    return sameMachineAlias || originUrl.origin.toLowerCase() === requestOrigin;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Validate CSRF by checking the Origin or Referer header against trusted origins.
  *
@@ -40,7 +67,7 @@ export function validateCsrf(request: Request): void {
 
   // Check origin header first
   if (origin) {
-    if (origin !== trustedOrigin) {
+    if (origin !== trustedOrigin && !isAllowedLocalDevOrigin(origin, requestUrl)) {
       throw {
         status: 403,
         error: "CSRF validation failed: origin mismatch",
@@ -53,7 +80,7 @@ export function validateCsrf(request: Request): void {
   if (referer) {
     try {
       const refererUrl = new URL(referer);
-      if (refererUrl.origin !== trustedOrigin) {
+      if (refererUrl.origin !== trustedOrigin && !isAllowedLocalDevOrigin(refererUrl.origin, requestUrl)) {
         throw {
           status: 403,
           error: "CSRF validation failed: referer origin mismatch",

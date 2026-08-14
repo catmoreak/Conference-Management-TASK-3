@@ -1,7 +1,18 @@
 import { createAuthClient } from "better-auth/react";
 import { twoFactorClient } from "better-auth/client/plugins";
 
-const DEFAULT_MAIN_PANEL_URL = "http://localhost:3000";
+function getDefaultMainPanelUrl() {
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host && host !== "localhost" && host !== "127.0.0.1") {
+      return `http://${host}:3000`;
+    }
+  }
+
+  return "http://localhost:3000";
+}
+
+const DEFAULT_MAIN_PANEL_URL = getDefaultMainPanelUrl();
 
 function normalizeAuthUrl(value) {
   return value.replace(/\/+$/, "");

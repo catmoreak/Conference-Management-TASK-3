@@ -6,7 +6,18 @@ import { translations, LANG_STORAGE_KEY } from "./lib/i18n";
 import { WebSocketClient } from "./websocket/WebSocketClient";
 import { IpcPresentationController } from "./presentation/IpcPresentationController";
 
-const wsUrl = (import.meta.env.VITE_WS_URL ?? "ws://localhost:4001").replace(/\/+$/, "");
+function getDefaultWsUrl() {
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host && host !== "localhost" && host !== "127.0.0.1") {
+      return `ws://${host}:4001`;
+    }
+  }
+
+  return "ws://localhost:4001";
+}
+
+const wsUrl = (import.meta.env.VITE_WS_URL ?? getDefaultWsUrl()).replace(/\/+$/, "");
 
 function AuthField({ label, id, type, value, onChange, placeholder, autoComplete, disabled }) {
   return (

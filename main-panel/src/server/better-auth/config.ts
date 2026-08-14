@@ -6,14 +6,22 @@ import { createAuthMiddleware } from "better-auth/api";
 import { env } from "~/env";
 import { db } from "~/server/db";
 import { writeAuditLog, extractIp, extractUserAgent } from "~/server/auth/audit";
+import { getLocalDevOrigins } from "~/server/http/cors";
+
+const localDevOrigins = getLocalDevOrigins();
 
 export const auth = betterAuth({
   appName: "Conference Management",
   baseURL: env.BETTER_AUTH_URL ?? "http://localhost:3000",
-  trustedOrigins: [
-    env.PODIUM_APP_URL ?? "http://localhost:5173",
-    "http://127.0.0.1:5173",
-  ],
+  trustedOrigins: Array.from(
+    new Set(
+      [
+        env.PODIUM_APP_URL,
+        env.BETTER_AUTH_URL,
+        ...localDevOrigins,
+      ].filter((value): value is string => Boolean(value)),
+    ),
+  ),
   database: prismaAdapter(db, {
     provider: "postgresql",
   }),
