@@ -267,7 +267,7 @@ export default function PresOpsDashboard() {
                 onClick={() => void handleConnect()}
                 className="px-4 py-2 rounded-xl text-xs font-semibold bg-[#0B1220] hover:bg-[#1A253C] text-white transition shadow-sm disabled:opacity-50"
               >
-                Connect
+                {connState === "connecting" ? "Connecting..." : "Connect"}
               </button>
             )}
           </div>
