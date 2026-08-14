@@ -25,6 +25,61 @@ async function loadSessionWithTenantCheck(
   return ls;
 }
 
+async function checkSessionConflict(
+  db: Parameters<Parameters<typeof viewProcedure["query"]>[0]>[0]["ctx"]["db"],
+  eventId: string,
+  roomId: string | null | undefined,
+  startsAt: Date | null | undefined,
+  endsAt: Date | null | undefined,
+  excludeId?: string,
+) {
+  if (!startsAt || !endsAt) return;
+
+  if (endsAt <= startsAt) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "End time must be after start time",
+    });
+  }
+
+  if (!roomId) return;
+
+  const conflict = await db.liveSession.findFirst({
+    where: {
+      eventId,
+      roomId,
+      deletedAt: null,
+      id: excludeId ? { not: excludeId } : undefined,
+      startsAt: { lt: endsAt },
+      endsAt: { gt: startsAt },
+    },
+  });
+
+  if (conflict) {
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: `Room is already booked by "${conflict.name}" during this time.`,
+    });
+  }
+}
+function checkStatusTransition(from: string, to: string) {
+  const allowed: Record<string, string[]> = {
+    scheduled: ["live", "cancelled"],
+    live: ["completed", "cancelled"],
+    completed: [],
+    cancelled: [],
+  };
+
+  if (from === to) return;
+
+  if (!allowed[from]?.includes(to)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Cannot change session status from "${from}" to "${to}".`,
+    });
+  }
+}
+
 export const liveSessionRouter = createTRPCRouter({
   /** List non-deleted sessions for a given event. */
   listByEvent: viewProcedure
@@ -83,13 +138,23 @@ export const liveSessionRouter = createTRPCRouter({
       assertTenantAccess(ctx.session, event.tenantId, true);
       if (input.roomId) {
         const room = await ctx.db.room.findUnique({ where: { id: input.roomId } });
-        if (!room || room.eventId !== input.eventId) {
+        if (room?.eventId !== input.eventId) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Room does not belong to this event",
           });
         }
       }
+      const startsAt = input.startsAt ? new Date(input.startsAt) : null;
+      const endsAt = input.endsAt ? new Date(input.endsAt) : null;
+
+      await checkSessionConflict(
+        ctx.db,
+        input.eventId,
+        input.roomId,
+        startsAt,
+        endsAt,
+      );
       return ctx.db.liveSession.create({
         data: {
           id: crypto.randomUUID(),
@@ -122,29 +187,66 @@ export const liveSessionRouter = createTRPCRouter({
       const ls = await loadSessionWithTenantCheck(ctx.db, ctx.session, id);
       if (fields.roomId !== undefined && fields.roomId !== null) {
         const room = await ctx.db.room.findUnique({ where: { id: fields.roomId } });
-        if (!room || room.eventId !== ls.eventId) {
+        if (room?.eventId !== ls.eventId) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message: "Room does not belong to this event",
           });
         }
       }
+      const startsAt =
+        fields.startsAt !== undefined
+          ? fields.startsAt
+            ? new Date(fields.startsAt)
+            : null
+          : ls.startsAt;
+
+      const endsAt =
+        fields.endsAt !== undefined
+          ? fields.endsAt
+            ? new Date(fields.endsAt)
+            : null
+          : ls.endsAt;
+
+      const roomId =
+        fields.roomId !== undefined ? fields.roomId : ls.roomId;
+
+      if (fields.status !== undefined) {
+        checkStatusTransition(ls.status, fields.status);
+      }
+
+      if (fields.status === "live" && ls.status !== "live") {
+        const approvedFile = await ctx.db.submission.findFirst({
+          where: {
+            liveSessionId: id,
+            status: "approved",
+            itemType: "file",
+            deletedAt: null,
+          },
+        });
+
+        if (!approvedFile) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Session cannot start until an approved file is linked.",
+          });
+        }
+      }
+
+      await checkSessionConflict(
+        ctx.db,
+        ls.eventId,
+        roomId,
+        startsAt,
+        endsAt,
+        id,
+      );
       return ctx.db.liveSession.update({
         where: { id },
         data: {
           ...fields,
-          startsAt:
-            fields.startsAt !== undefined
-              ? fields.startsAt
-                ? new Date(fields.startsAt)
-                : null
-              : undefined,
-          endsAt:
-            fields.endsAt !== undefined
-              ? fields.endsAt
-                ? new Date(fields.endsAt)
-                : null
-              : undefined,
+          startsAt,
+          endsAt,
         },
       });
     }),

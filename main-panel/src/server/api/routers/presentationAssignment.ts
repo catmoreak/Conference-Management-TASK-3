@@ -65,6 +65,32 @@ export const presentationAssignmentRouter = createTRPCRouter({
           message: "Presenter does not belong to this event",
         });
       }
+      let conflict = null;
+
+      if (ls.startsAt && ls.endsAt) {
+        conflict = await ctx.db.presentationAssignment.findFirst({
+          where: {
+            presenterId: input.presenterId,
+            liveSession: {
+              deletedAt: null,
+              startsAt: { lt: ls.endsAt },
+              endsAt: { gt: ls.startsAt },
+              id: { not: input.liveSessionId },
+            },
+          },
+          include: {
+            liveSession: true,
+          },
+        });
+      }
+
+      if (conflict) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `Presenter is already scheduled for "${conflict.liveSession.name}" during this time.`,
+        });
+      }
+
       try {
         return await ctx.db.presentationAssignment.create({
           data: {
