@@ -1,7 +1,7 @@
 FROM node:20-bookworm-slim AS deps
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY package*.json ./
 RUN npm install --include=optional --no-audit --no-fund
 
 FROM node:20-bookworm-slim AS builder
