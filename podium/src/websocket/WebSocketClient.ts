@@ -53,20 +53,41 @@ export class WebSocketClient {
 
     if (this.presentationController) {
       this.presentationController.onStateChange((state) => {
+        // `state` is the raw {type, sessionId, status, timestamp} object main.js
+        // sends over 'podium-status' IPC (see IpcPresentationController.onStateChange),
+        // not a bare string -- so `typeof state === "string"` was always false here,
+        // meaning control previously got a hardcoded status:"ready"/message:"state_changed"
+        // for every transition (load/play/exit/offline all looked identical), which made
+        // it impossible for the operator UI to tell whether Play/Next/Prev actually landed.
+        const statusValue =
+          this.isRecord(state) && typeof state.status === "string" ? (state.status as PodiumStatus["status"]) : "ready";
+        const sessionId = this.isRecord(state) && typeof state.sessionId === "string" ? state.sessionId : "";
+        const message = this.isRecord(state) && typeof state.message === "string" ? state.message : undefined;
         this.sendStatus({
           type: "status",
-          sessionId: "",
-          status: "ready",
-          message: typeof state === "string" ? state : "state_changed",
+          sessionId,
+          status: statusValue,
+          ...(message ? { message } : {}),
           timestamp: Date.now(),
         });
       });
 
       this.presentationController.onError((error) => {
+        // Same bug as onStateChange above: `error` is the raw {type, sessionId,
+        // code, message, timestamp} object main.js sends over 'podium-error' IPC,
+        // not a bare string -- so this always sent the generic fallback message
+        // "presentation_error" instead of the real failure reason, and always
+        // duplicated whatever real error routeCommand()'s own catch already sent
+        // (that one carries the real message; this one only ever said
+        // "presentation_error" with no sessionId).
+        const code = this.isRecord(error) && typeof error.code === "string" ? error.code : "presentation_error";
+        const message = this.isRecord(error) && typeof error.message === "string" ? error.message : "presentation_error";
+        const sessionId = this.isRecord(error) && typeof error.sessionId === "string" ? error.sessionId : undefined;
         this.sendError({
           type: "error",
-          code: "presentation_error",
-          message: typeof error === "string" ? error : "presentation_error",
+          code,
+          message,
+          ...(sessionId ? { sessionId } : {}),
         });
       });
     }

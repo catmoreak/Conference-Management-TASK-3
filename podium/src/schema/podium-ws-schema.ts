@@ -126,13 +126,22 @@ export interface PodiumStatus {
    */
   readonly sessionId: string;
   /**
-   * The connection or runtime status that is currently true.
+   * The connection or runtime status that is currently true. "display_connected"
+   * and "display_disconnected" are relay-generated (sent to the control
+   * connection only, when a podium display joins/leaves the room) rather
+   * than reported by podium itself.
    */
-  readonly status: "connecting" | "ready" | "connected" | "disconnected" | "error";
+  readonly status: "connecting" | "ready" | "connected" | "disconnected" | "error" | "display_connected" | "display_disconnected" | "playing" | "offline";
   /**
    * Optional human-readable explanation of the current status.
    */
   readonly message?: string;
+  /**
+   * Number of podium displays currently in the room. Present on
+   * "connected"/"display_connected"/"display_disconnected" status messages
+   * sent to a control connection.
+   */
+  readonly displayCount?: number;
   /**
    * Monotonic timestamp for correlation and debugging.
    */

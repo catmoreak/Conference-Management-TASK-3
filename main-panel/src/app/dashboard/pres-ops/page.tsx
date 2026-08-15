@@ -16,6 +16,7 @@ export default function PresOpsDashboard() {
   const [liveSessionId, setLiveSessionId] = useState("");
   const [submissionId, setSubmissionId] = useState("");
   const [connState, setConnState] = useState<ConnState>("disconnected");
+  const [displayConnected, setDisplayConnected] = useState(false);
   const [log, setLog] = useState<string[]>([]);
   const [loadingFile, setLoadingFile] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
@@ -43,6 +44,7 @@ export default function PresOpsDashboard() {
   async function handleConnect() {
     if (!liveSessionId) return;
     setConnState("connecting");
+    setDisplayConnected(false);
 
     const res = await fetch("/api/ws/token", {
       method: "POST",
@@ -83,8 +85,25 @@ export default function PresOpsDashboard() {
           appendLog(lang === "ja" ? "他のオペレーターがこのセッションを既に操作中です。" : "Another operator already controls this session.");
           return;
         }
+        if (msg.type === "error" && msg.code === "no_display") {
+          appendLog(
+            lang === "ja"
+              ? "ポディウムディスプレイが接続されていません。コマンドは送信されませんでした。"
+              : "No podium display is connected — the command was not delivered.",
+          );
+          return;
+        }
         if (msg.type === "status" && msg.status === "connected") {
           setConnState("connected");
+          if (typeof msg.displayCount === "number") {
+            setDisplayConnected(msg.displayCount > 0);
+          }
+        }
+        if (msg.type === "status" && msg.status === "display_connected") {
+          setDisplayConnected(true);
+        }
+        if (msg.type === "status" && msg.status === "display_disconnected") {
+          setDisplayConnected(false);
         }
         appendLog(`recv: ${JSON.stringify(msg)}`);
       } catch {
@@ -94,6 +113,7 @@ export default function PresOpsDashboard() {
 
     socket.addEventListener("close", () => {
       setConnState("disconnected");
+      setDisplayConnected(false);
       appendLog(lang === "ja" ? "切断されました。" : "Disconnected.");
     });
 
@@ -119,7 +139,7 @@ export default function PresOpsDashboard() {
   }
 
   const selectedSubmission = (submissions ?? []).find((s) => s.id === submissionId);
-  const canOperate = connState === "connected";
+  const canOperate = connState === "connected" && displayConnected;
 
   async function handleLoad() {
     if (!selectedSubmission) return;
@@ -264,6 +284,19 @@ export default function PresOpsDashboard() {
             >
               {getConnStateLabel(connState)}
             </span>
+            {connState === "connected" && (
+              <span
+                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border tracking-wider uppercase shadow-sm ${
+                  displayConnected
+                    ? "bg-[#10B981]/15 text-[#10B981] border-[#10B981]/30"
+                    : "bg-amber-50 text-amber-600 border-amber-200"
+                }`}
+              >
+                {displayConnected
+                  ? (lang === "ja" ? "ポディウム接続済み" : "Podium Connected")
+                  : (lang === "ja" ? "ポディウム未接続" : "No Podium Display")}
+              </span>
+            )}
             {connState === "connected" ? (
               <button
                 onClick={handleDisconnect}
@@ -287,6 +320,13 @@ export default function PresOpsDashboard() {
           <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">
             {lang === "ja" ? "再生・投影コントロール" : "Playback Controls"}
           </h2>
+          {connState === "connected" && !displayConnected && (
+            <p className="text-xs font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+              {lang === "ja"
+                ? "ポディウムアプリがこのセッションにディスプレイとして接続されていません。ポディウムアプリで「ディスプレイとして接続」を行ってください。"
+                : "The podium app is not connected as a display for this session. Open the podium app and connect it as a display before using these controls."}
+            </p>
+          )}
           <div className="flex flex-wrap gap-2.5">
             <button
               disabled={!canOperate || !selectedSubmission || loadingFile}

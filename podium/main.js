@@ -165,6 +165,22 @@ function createLiveViewerWindowShell(title, options = {}) {
   );
   win.setMenuBarVisibility(false);
 
+  if (isDev) {
+    // F12/Ctrl+Shift+I normally open DevTools via Electron's default
+    // application menu accelerators, but Menu.setApplicationMenu(null) (set
+    // globally for this app) strips that menu out entirely, along with the
+    // shortcut -- so without this, there's no way to open DevTools on this
+    // window at all, dev build or not.
+    win.webContents.on('before-input-event', (_event, input) => {
+      if (input.type !== 'keyDown') return;
+      const isDevToolsShortcut =
+        input.key === 'F12' || ((input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i');
+      if (isDevToolsShortcut) {
+        win.webContents.toggleDevTools();
+      }
+    });
+  }
+
   if (options.emergencyExit) {
     // Escape-key fallback -- BrowserWindow.setFullScreen() is native-window
     // fullscreen, not the content's requestFullscreen(), so Chromium's
@@ -264,13 +280,132 @@ function loadCoverIntoViewer(win, text) {
 }
 
 /**
- * Simulates a single arrow-key press in the embedded viewer window to move
- * to the next/previous slide. Office Online's and Google Docs' viewers both
- * bind Right/Left arrows to slide navigation -- this is the only remote
- * control surface an embedded read-only viewer exposes (no automation API,
- * unlike PowerPoint's COM object model).
+ * Collects a frame and every descendant frame in its subtree (recursively
+ * walking .frames rather than relying on the newer .framesInSubtree getter,
+ * to stay compatible regardless of exact Electron version). Office Online
+ * renders its actual toolbar and slide content inside a nested iframe --
+ * confirmed via DevTools -- so a script run only via
+ * webContents.executeJavaScript() (which is scoped to the main frame) can
+ * never see those elements at all, matching or not, explaining why the
+ * on-screen "Start Slide Show" button and next/prev arrows were never
+ * found in any prior attempt despite clearly existing.
  */
-function sendNavigationKey(win, direction) {
+function collectFrames(frame, out = []) {
+  if (!frame) return out;
+  out.push(frame);
+  for (const child of frame.frames) {
+    collectFrames(child, out);
+  }
+  return out;
+}
+
+/**
+ * Runs `script` in every frame of the window (main frame plus every nested
+ * iframe, same-origin or not) and returns the first frame's truthy result
+ * (the script returns false on no match, or a details object on a match).
+ * Each frame gets its own try/catch since a cross-origin, detached, or
+ * mid-navigation frame can reject execution entirely.
+ */
+async function clickInAnyFrame(win, script) {
+  if (win.isDestroyed()) return false;
+  const frames = collectFrames(win.webContents.mainFrame);
+  console.log(`[navigateSlide] searching ${frames.length} frame(s)`);
+  for (const frame of frames) {
+    try {
+      const result = await frame.executeJavaScript(script);
+      console.log(`[navigateSlide] frame url=${frame.url} result=${JSON.stringify(result)}`);
+      if (result) return result;
+    } catch (err) {
+      console.log(`[navigateSlide] frame url=${frame.url} threw: ${err?.message ?? err}`);
+    }
+  }
+  return false;
+}
+
+/**
+ * Moves to the next/previous slide in the embedded viewer window. Confirmed
+ * by hand that this viewer's real navigation surface is a clickable
+ * on-screen prev/next arrow next to the "SLIDE X OF Y" indicator at the
+ * bottom-center of the window, NOT a keyboard shortcut -- a synthetic arrow
+ * keypress here was silently doing nothing across every prior test, even
+ * with DOM focus established, while manually clicking the on-screen arrow
+ * worked every time. So this clicks that control directly (matched by its
+ * accessible label, searched across every frame per clickInAnyFrame above)
+ * and only falls back to a coordinate-based click -- at the bottom-center
+ * position seen in a live screenshot, not screen edges as first guessed --
+ * if no matching labeled element is found (e.g. an icon-only control).
+ * sendInputEvent operates at the window/compositor level, so unlike the DOM
+ * search this fallback reaches on-screen content regardless of iframe
+ * boundaries. The keypress is still sent too, harmlessly, in case a
+ * different viewer state (e.g. the Google Docs fallback) does bind it.
+ */
+async function navigateSlide(win, direction) {
+  const term = direction === 'next' ? 'next' : 'previous';
+  const clickScript = `
+    (function() {
+      function isVisible(el) {
+        var r = el.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0) return false;
+        // Rejects elements parked off-screen (e.g. a collapsed toolbar's
+        // controls still present in the DOM at a negative position) --
+        // width/height alone doesn't catch that, since such elements can
+        // still report a normal size, just outside the visible viewport.
+        if (r.right <= 0 || r.bottom <= 0) return false;
+        var s = getComputedStyle(el);
+        return s.visibility !== 'hidden' && s.display !== 'none' && Number(s.opacity) !== 0;
+      }
+      // Anchored to the WHOLE label (^...$), not just a substring match --
+      // otherwise this matches unrelated controls that merely contain the
+      // word "next"/"previous", e.g. a viewer's own "Find next" (Ctrl+F
+      // search) button, which is a real false positive seen in testing.
+      var re = new RegExp('^${term}(\\\\s+(slide|page))?$', 'i');
+      var candidates = document.querySelectorAll('button, a, [role="button"]');
+      for (var i = 0; i < candidates.length; i++) {
+        var el = candidates[i];
+        if (el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
+        var label = (el.getAttribute('aria-label') || el.getAttribute('title') || '').trim();
+        if (!label || !re.test(label) || !isVisible(el)) continue;
+
+        // el.click() only fires a synthetic "click" DOM event -- it does NOT
+        // simulate the pointerdown/mousedown/mouseup sequence a real click
+        // produces. If this control's handler is bound to one of those
+        // lower-level events instead (common in React/Fluent-UI-style
+        // components for snappier feel), .click() finds the right element
+        // but silently does nothing -- so dispatch the full realistic
+        // sequence instead of relying on .click() alone.
+        var rect = el.getBoundingClientRect();
+        var cx = rect.left + rect.width / 2;
+        var cy = rect.top + rect.height / 2;
+        var opts = { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy, buttons: 1 };
+        ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (type) {
+          var Ctor = type.indexOf('pointer') === 0 ? PointerEvent : MouseEvent;
+          el.dispatchEvent(new Ctor(type, opts));
+        });
+
+        return {
+          tag: el.tagName,
+          label: label,
+          rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        };
+      }
+      return false;
+    })();
+  `;
+
+  const result = await clickInAnyFrame(win, clickScript);
+  console.log(`[navigateSlide] direction=${direction} result=${JSON.stringify(result)}`);
+  const clicked = Boolean(result);
+
+  if (!clicked && !win.isDestroyed()) {
+    const bounds = win.getContentBounds();
+    const y = Math.round(bounds.height * 0.975);
+    const x = Math.round(bounds.width * (direction === 'next' ? 0.56 : 0.44));
+    console.log(`[navigateSlide] falling back to coordinate click at (${x}, ${y}) within ${bounds.width}x${bounds.height}`);
+    win.webContents.sendInputEvent({ type: 'mouseMove', x, y });
+    win.webContents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+    win.webContents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+  }
+
   const keyCode = direction === 'next' ? 'Right' : 'Left';
   win.webContents.sendInputEvent({ type: 'keyDown', keyCode });
   win.webContents.sendInputEvent({ type: 'keyUp', keyCode });
@@ -344,6 +479,22 @@ app.whenReady().then(() => {
           liveEmbeddedWindow.focus();
           liveEmbeddedWindow.setFullScreen(true);
           liveState = 'playing';
+
+          // Establishes DOM focus on the viewer content before any
+          // next_slide/prev_slide arrives -- confirmed by hand that this
+          // viewer's own on-screen arrows are what actually navigate (see
+          // navigateSlide()), but a real click here first still helps make
+          // sure the page itself is focused/settled after the fullscreen
+          // transition. Delayed slightly since that transition can briefly
+          // invalidate content bounds.
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          if (!liveEmbeddedWindow.isDestroyed()) {
+            const bounds = liveEmbeddedWindow.getContentBounds();
+            const x = Math.round(bounds.width / 2);
+            const y = Math.round(bounds.height / 2);
+            liveEmbeddedWindow.webContents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
+            liveEmbeddedWindow.webContents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
+          }
           break;
         }
 
@@ -352,7 +503,7 @@ app.whenReady().then(() => {
           if (!liveEmbeddedWindow || liveEmbeddedWindow.isDestroyed() || liveState !== 'playing') {
             throw new Error('Slideshow is not running; call play first.');
           }
-          sendNavigationKey(liveEmbeddedWindow, cmd.type === 'next_slide' ? 'next' : 'prev');
+          await navigateSlide(liveEmbeddedWindow, cmd.type === 'next_slide' ? 'next' : 'prev');
           break;
         }
 
@@ -388,6 +539,11 @@ app.whenReady().then(() => {
       return { success: true, status: { totalSlides: null } };
     } catch (err) {
       const message = err?.message ?? String(err);
+      // Visible in the terminal running the podium app (main-process console,
+      // not devtools) -- without this, a failure here was only reported over
+      // the WS relay pipe, which itself had bugs that silently swallowed or
+      // genericized real error messages, making local debugging impossible.
+      console.error(`[podium-command] ${cmd.type} failed:`, err);
       mainWindowRef?.webContents.send('podium-error', {
         type: 'error',
         sessionId: cmd.sessionId ?? null,

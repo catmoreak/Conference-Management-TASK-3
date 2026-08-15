@@ -111,6 +111,22 @@ function sendError(ws: WebSocket, code: string, message: string): void {
   send(ws, { type: "error", code, message });
 }
 
+// Lets the operator UI reflect whether a podium display is actually in the
+// room -- without this, control's "connected" badge only ever reflects its
+// own auth handshake, so Play/Prev/Next look enabled and "sent" even when
+// no display is present to receive them (commands are just silently
+// dropped by the relay loop below).
+function notifyControlOfDisplayCount(room: Room, liveSessionId: string): void {
+  if (!room.control) return;
+  send(room.control, {
+    type: "status",
+    sessionId: liveSessionId,
+    status: room.displays.size > 0 ? "display_connected" : "display_disconnected",
+    displayCount: room.displays.size,
+    timestamp: Date.now(),
+  });
+}
+
 // Plain HTTP requests (not WS upgrades) hitting this same port/server are
 // treated as a health check -- lets a load balancer or uptime monitor
 // point at this process without a separate port.
@@ -212,8 +228,16 @@ wss.on("connection", (ws: WebSocket, req) => {
           type: "status",
           sessionId: liveSessionId,
           status: "connected",
+          displayCount: room.displays.size,
           timestamp: Date.now(),
         });
+
+        // A newly-joined display should immediately update an already-connected
+        // operator's UI (and vice versa isn't needed -- a display doesn't show
+        // a "control connected" indicator).
+        if (purpose === "display") {
+          notifyControlOfDisplayCount(room, liveSessionId);
+        }
       });
       return;
     }
@@ -232,6 +256,14 @@ wss.on("connection", (ws: WebSocket, req) => {
       }
       if (!roleHasPermissions(role, "live-control:operate")) {
         sendError(ws, "forbidden", "Role lacks live-control:operate permission");
+        return;
+      }
+      if (room.displays.size === 0) {
+        // Otherwise the command is silently dropped by the empty loop below --
+        // from the operator's console it looked identical to success (it
+        // still logged "sent: play") while nothing happened on the podium
+        // display, because there wasn't one connected to receive it.
+        sendError(ws, "no_display", "No podium display is connected to this session");
         return;
       }
       console.log(
@@ -258,6 +290,7 @@ wss.on("connection", (ws: WebSocket, req) => {
       room.control = null;
     } else if (purpose === "display") {
       room.displays.delete(ws);
+      notifyControlOfDisplayCount(room, liveSessionId);
     }
     cleanupRoomIfEmpty(liveSessionId);
   });
