@@ -5,7 +5,8 @@ NPM_CONFIG_INCLUDE = "optional"
 [phases.install]
 cmds = [
   "rm -rf node_modules",
-  "npm ci --include=optional --no-audit --no-fund"
+  "rm -f package-lock.json",
+  "npm install --include=optional --no-audit --no-fund"
 ]
 
 [phases.build]
