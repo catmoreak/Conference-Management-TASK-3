@@ -1,0 +1,20 @@
+[variables]
+NPM_CONFIG_PRODUCTION = "false"
+NPM_CONFIG_INCLUDE = "optional"
+
+[phases.install]
+cmds = [
+  "cd main-panel",
+  "rm -rf node_modules",
+  "rm -f package-lock.json",
+  "npm install --include=optional --no-audit --no-fund"
+]
+
+[phases.build]
+cmds = [
+  "cd main-panel",
+  "npm run build"
+]
+
+[start]
+cmd = "cd main-panel && npm run start"
