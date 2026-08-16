@@ -1,12 +1,16 @@
 FROM node:20-bookworm-slim AS deps
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+
 COPY . /tmp/src
 RUN if [ -f /tmp/src/main-panel/package.json ]; then cp -a /tmp/src/main-panel/. /app/; else cp -a /tmp/src/. /app/; fi
 RUN npm install --include=optional --no-audit --no-fund
 
 FROM node:20-bookworm-slim AS builder
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 
 ENV SKIP_ENV_VALIDATION=1
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -16,6 +20,8 @@ RUN npm run build
 
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
 ENV SKIP_ENV_VALIDATION=1

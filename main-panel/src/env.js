@@ -15,8 +15,26 @@ export const env = createEnv({
       process.env.NODE_ENV === "production"
         ? z.string().min(32, "WS_JWT_SECRET must be at least 32 characters")
         : z.string().optional(),
-    BETTER_AUTH_URL: z.string().url().optional(),
-    PODIUM_APP_URL: z.string().url().optional(),
+    // Required in production: this app's own public origin. It's the base
+    // for Better Auth's baseURL/trustedOrigins and for the CORS allow-list
+    // (buildAllowedOrigins) -- if unset, both silently fall back to
+    // http://localhost:3000 in server/better-auth/config.ts, so a request
+    // from the real production origin fails CORS/CSRF with an origin
+    // mismatch instead of the app just refusing to boot.
+    BETTER_AUTH_URL:
+      process.env.NODE_ENV === "production"
+        ? z.string().url()
+        : z.string().url().optional(),
+    // Required in production: podium's public origin. Without it, the CORS
+    // allow-list and Better Auth's trustedOrigins drop podium entirely once
+    // NODE_ENV=production (the local-dev-origins fallback that covers it
+    // in development no longer applies), so every cross-origin call podium
+    // makes to this app (uploads, /api/ws/token, /api/live-sessions,
+    // checkin) fails CORS/CSRF.
+    PODIUM_APP_URL:
+      process.env.NODE_ENV === "production"
+        ? z.string().url()
+        : z.string().url().optional(),
     DATABASE_URL: z.string().url(),
     // Required in production: without these two, isS3Configured() is false
     // and every upload/download route silently 501s -- fail at boot, not
