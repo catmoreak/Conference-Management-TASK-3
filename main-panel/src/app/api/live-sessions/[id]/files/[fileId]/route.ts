@@ -9,7 +9,7 @@ import { assertPermissions } from "~/server/auth/rbac";
 import { assertTenantAccess } from "~/server/auth/tenant";
 import { validateCsrf } from "~/server/auth/csrf";
 import { writeAuditLog, extractIp, extractUserAgent } from "~/server/auth/audit";
-import { buildAllowedOrigins, getOriginFromUrl, withCorsHeaders } from "~/server/http/cors";
+import { buildAllowedOrigins, getOriginFromUrl, isAllowedOrigin, withCorsHeaders } from "~/server/http/cors";
 
 const allowedOrigins = buildAllowedOrigins(env.PODIUM_APP_URL, env.BETTER_AUTH_URL);
 
@@ -32,7 +32,7 @@ export async function OPTIONS(request: Request): Promise<Response> {
   resHeaders.set("Access-Control-Allow-Methods", "PATCH,DELETE,OPTIONS");
   resHeaders.set("Access-Control-Allow-Headers", requestedHeaders);
   resHeaders.set("Access-Control-Allow-Credentials", "true");
-  if (origin && allowedOrigins.has(origin)) {
+  if (isAllowedOrigin(origin, allowedOrigins)) {
     resHeaders.set("Access-Control-Allow-Origin", origin);
   }
   return new Response(null, { status: 204, headers: resHeaders });
@@ -56,7 +56,7 @@ async function loadFileWithTenantCheck(
 
 function validateOrigin(request: Request) {
   const origin = request.headers.get("origin");
-  if (origin && !allowedOrigins.has(origin)) {
+  if (origin && !isAllowedOrigin(origin, allowedOrigins)) {
     throw { status: 403, error: "Forbidden origin" };
   }
   if (!origin || getOriginFromUrl(env.BETTER_AUTH_URL) === origin) {

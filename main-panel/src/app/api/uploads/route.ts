@@ -13,7 +13,7 @@ import {
   uploadObjectToS3,
 } from "~/server/storage/s3-client";
 import { MAX_UPLOAD_BYTES, detectFileKind, isExtensionConsistent, checkZipBomb } from "~/server/storage/file-validation";
-import { buildAllowedOrigins, getOriginFromUrl, withCorsHeaders } from "~/server/http/cors";
+import { buildAllowedOrigins, getOriginFromUrl, isAllowedOrigin, withCorsHeaders } from "~/server/http/cors";
 
 const allowedOrigins = buildAllowedOrigins(env.PODIUM_APP_URL, env.BETTER_AUTH_URL);
 
@@ -33,7 +33,7 @@ export async function OPTIONS(request: Request): Promise<Response> {
   headers.set("Access-Control-Allow-Headers", requestedHeaders);
   headers.set("Access-Control-Allow-Credentials", "true");
 
-  if (origin && allowedOrigins.has(origin)) {
+  if (isAllowedOrigin(origin, allowedOrigins)) {
     headers.set("Access-Control-Allow-Origin", origin);
   }
 
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     // strict same-origin check there. Same-origin calls (the pres-ops
     // dashboard itself) still go through validateCsrf().
     const origin = request.headers.get("origin");
-    if (origin && !allowedOrigins.has(origin)) {
+    if (origin && !isAllowedOrigin(origin, allowedOrigins)) {
       return withCorsHeaders(
         NextResponse.json({ error: "Forbidden origin" }, { status: 403 }),
         request,

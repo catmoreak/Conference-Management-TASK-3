@@ -3,7 +3,7 @@ import { env } from "~/env";
 import { db } from "~/server/db";
 import { extractIp } from "~/server/auth/audit";
 import { checkRateLimit } from "~/server/http/rate-limit";
-import { buildAllowedOrigins, withCorsHeaders } from "~/server/http/cors";
+import { buildAllowedOrigins, isAllowedOrigin, withCorsHeaders } from "~/server/http/cors";
 
 /**
  * Public check-in API — no authentication required.
@@ -24,7 +24,7 @@ export async function OPTIONS(request: Request): Promise<Response> {
   headers.set("Vary", "Origin");
   headers.set("Access-Control-Allow-Methods", "GET,OPTIONS");
   headers.set("Access-Control-Allow-Credentials", "true");
-  if (origin && allowedOrigins.has(origin)) {
+  if (isAllowedOrigin(origin, allowedOrigins)) {
     headers.set("Access-Control-Allow-Origin", origin);
   }
   return new Response(null, { status: 204, headers });

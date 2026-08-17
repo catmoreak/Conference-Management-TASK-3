@@ -14,7 +14,7 @@ import { mintWsToken } from "~/server/auth/ws-token";
 import { shadowCompare } from "~/server/auth/shadow-check";
 import { authorizeAndRun } from "~/server/auth/authz/authorize";
 import { PrismaAuthzStore } from "~/server/auth/authz/prisma-store";
-import { buildAllowedOrigins, getOriginFromUrl, withCorsHeaders } from "~/server/http/cors";
+import { buildAllowedOrigins, getOriginFromUrl, isAllowedOrigin, withCorsHeaders } from "~/server/http/cors";
 
 const authzStore = new PrismaAuthzStore();
 
@@ -34,7 +34,7 @@ export async function OPTIONS(request: Request): Promise<Response> {
     request.headers.get("access-control-request-headers") ?? "content-type",
   );
   headers.set("Access-Control-Allow-Credentials", "true");
-  if (origin && allowedOrigins.has(origin)) {
+  if (isAllowedOrigin(origin, allowedOrigins)) {
     headers.set("Access-Control-Allow-Origin", origin);
   }
   return new Response(null, { status: 204, headers });
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
   try {
     // ── CSRF / cross-origin ─────────────────────────────────────────
     const requestOrigin = request.headers.get("origin");
-    if (requestOrigin && !allowedOrigins.has(requestOrigin)) {
+    if (requestOrigin && !isAllowedOrigin(requestOrigin, allowedOrigins)) {
       return withCorsHeaders(
         NextResponse.json({ error: "Forbidden origin" }, { status: 403 }),
         request,

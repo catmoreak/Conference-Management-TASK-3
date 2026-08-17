@@ -5,7 +5,7 @@ import { db } from "~/server/db";
 import { getSession } from "~/server/better-auth/server";
 import { assertPermissions } from "~/server/auth/rbac";
 import { assertTenantAccess } from "~/server/auth/tenant";
-import { buildAllowedOrigins, withCorsHeaders } from "~/server/http/cors";
+import { buildAllowedOrigins, isAllowedOrigin, withCorsHeaders } from "~/server/http/cors";
 
 /**
  * Authenticated live-session lookup for podium's "connect as display"
@@ -22,7 +22,7 @@ export async function OPTIONS(request: Request): Promise<Response> {
   headers.set("Vary", "Origin");
   headers.set("Access-Control-Allow-Methods", "GET,OPTIONS");
   headers.set("Access-Control-Allow-Credentials", "true");
-  if (origin && allowedOrigins.has(origin)) {
+  if (isAllowedOrigin(origin, allowedOrigins)) {
     headers.set("Access-Control-Allow-Origin", origin);
   }
   return new Response(null, { status: 204, headers });

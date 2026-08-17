@@ -10,7 +10,7 @@ import { assertTenantAccess } from "~/server/auth/tenant";
 import { assertOnboardingComplete } from "~/server/auth/mfa-gate";
 import { validateCsrf } from "~/server/auth/csrf";
 import { writeAuditLog, extractIp, extractUserAgent } from "~/server/auth/audit";
-import { buildAllowedOrigins, getOriginFromUrl, withCorsHeaders } from "~/server/http/cors";
+import { buildAllowedOrigins, getOriginFromUrl, isAllowedOrigin, withCorsHeaders } from "~/server/http/cors";
 
 /**
  * Creates a lightweight "cover" item in a live session's file list -- a
@@ -36,7 +36,7 @@ export async function OPTIONS(request: Request): Promise<Response> {
   resHeaders.set("Access-Control-Allow-Methods", "POST,OPTIONS");
   resHeaders.set("Access-Control-Allow-Headers", requestedHeaders);
   resHeaders.set("Access-Control-Allow-Credentials", "true");
-  if (origin && allowedOrigins.has(origin)) {
+  if (isAllowedOrigin(origin, allowedOrigins)) {
     resHeaders.set("Access-Control-Allow-Origin", origin);
   }
   return new Response(null, { status: 204, headers: resHeaders });
@@ -46,7 +46,7 @@ export async function OPTIONS(request: Request): Promise<Response> {
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const origin = request.headers.get("origin");
-    if (origin && !allowedOrigins.has(origin)) {
+    if (origin && !isAllowedOrigin(origin, allowedOrigins)) {
       return withCorsHeaders(NextResponse.json({ error: "Forbidden origin" }, { status: 403 }), request, allowedOrigins);
     }
     if (!origin || getOriginFromUrl(env.BETTER_AUTH_URL) === origin) {

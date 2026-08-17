@@ -93,9 +93,20 @@ export function buildAllowedOrigins(...extraUrls: (string | null | undefined)[])
   return allOrigins;
 }
 
+export function isDesktopOrigin(origin: string | null | undefined): origin is string {
+  if (!origin) return false;
+  const normalized = origin.trim().toLowerCase();
+  return normalized === "null" || normalized.startsWith("file://");
+}
+
+export function isAllowedOrigin(origin: string | null, allowedOrigins: Set<string>): origin is string {
+  if (!origin) return false;
+  return isDesktopOrigin(origin) || allowedOrigins.has(origin);
+}
+
 export function withCorsHeaders(response: Response, request: Request, allowedOrigins: Set<string>): Response {
   const origin = request.headers.get("origin");
-  if (!origin || !allowedOrigins.has(origin)) {
+  if (!isAllowedOrigin(origin, allowedOrigins)) {
     return response;
   }
   const headers = new Headers(response.headers);
