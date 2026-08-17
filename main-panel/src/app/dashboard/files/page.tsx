@@ -211,16 +211,16 @@ export default function SessionFilesPage() {
   }
 
   return (
-    <div className="flex-1 bg-[#F8FAFC] text-text-secondary p-8">
+    <div className="flex-1 bg-[#F8FAFC] text-text-secondary p-4 sm:p-8">
       <div className="max-w-4xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-[#0B1220] tracking-tight">{t.filesPage.title}</h1>
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-xl sm:text-2xl font-bold text-[#0B1220] tracking-tight">{t.filesPage.title}</h1>
           <p className="text-gray-500 text-xs mt-1">
             {t.filesPage.subTitle}
           </p>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4 mb-6">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 shadow-sm space-y-4 mb-6">
           <div className={`grid grid-cols-1 gap-4 ${(sessions ?? []).length > 1 ? "sm:grid-cols-2" : ""}`}>
             <div>
               <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2" htmlFor="ev-select">
@@ -337,8 +337,8 @@ export default function SessionFilesPage() {
             </span>
           </div>
         ) : (
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-            <table className="w-full text-left border-collapse">
+          <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto shadow-sm">
+            <table className="w-full min-w-[640px] text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-gray-400 text-[10px] font-bold uppercase tracking-wider">
                   <th className="px-6 py-3.5">{lang === "ja" ? "順序" : "Order"}</th>

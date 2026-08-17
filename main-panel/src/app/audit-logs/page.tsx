@@ -92,13 +92,19 @@ export default function AuditLogsPage() {
   }
 
   return (
-    <div className="flex-1 bg-bg-primary text-text-secondary p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">{t.auditLogsPage.title}</h1>
-          <p className="text-text-secondary text-sm mt-1">
-            {t.auditLogsPage.subTitle}
-          </p>
+    <div className="flex-1 bg-bg-primary text-text-secondary p-4 sm:p-8">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-text-primary tracking-tight">{t.auditLogsPage.title}</h1>
+            <p className="text-text-secondary text-xs sm:text-sm mt-1">{t.auditLogsPage.subTitle}</p>
+          </div>
+          <button
+            onClick={() => void fetchLogs()}
+            className="self-end sm:self-auto bg-bg-secondary hover:bg-white text-text-primary border border-border-soft font-semibold px-4 py-2.5 rounded-lg text-sm transition focus:outline-none focus:ring-2 focus:ring-accent-blue shadow-hard hover:shadow-hard-hover"
+          >
+            {t.actions.refresh}
+          </button>
         </div>
 
         {error && (
@@ -107,8 +113,8 @@ export default function AuditLogsPage() {
           </div>
         )}
 
-        {/* Filters Form */}
-        <form onSubmit={handleFilterSubmit} className="bg-bg-secondary border border-border-soft p-6 rounded-xl mb-8 space-y-4 shadow-hard-lg">
+        {/* Filter Controls */}
+        <form onSubmit={handleFilterSubmit} className="bg-bg-secondary border border-border-soft rounded-xl p-4 sm:p-6 mb-6 shadow-hard">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs font-semibold text-text-secondary mb-1.5" htmlFor="filter-actor">
@@ -185,7 +191,7 @@ export default function AuditLogsPage() {
         {/* Audit Logs Table */}
         <div className="bg-bg-secondary border border-border-soft rounded-xl overflow-hidden shadow-hard-lg">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full min-w-[800px] text-left border-collapse">
               <thead>
                 <tr className="bg-white border-b border-border-soft text-text-secondary text-xs font-semibold uppercase tracking-wider">
                   <th className="px-6 py-4">{t.auditLogsPage.timestamp}</th>

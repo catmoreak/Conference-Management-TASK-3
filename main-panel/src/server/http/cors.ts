@@ -50,24 +50,47 @@ export function getLocalDevOrigins(): string[] {
 
 export function getOriginFromUrl(urlValue: string | null | undefined): string | null {
   if (!urlValue) return null;
+  const trimmed = urlValue.trim();
+  if (!trimmed) return null;
   try {
-    return new URL(urlValue).origin;
+    const formatted = trimmed.startsWith("http://") || trimmed.startsWith("https://") ? trimmed : `https://${trimmed}`;
+    return new URL(formatted).origin;
   } catch {
     return null;
   }
 }
 
+export function parseConfiguredOrigins(envValue?: string | null): string[] {
+  if (!envValue) return [];
+  return envValue
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map(getOriginFromUrl)
+    .filter((origin): origin is string => origin !== null);
+}
+
 /**
- * Builds the allowed-origins set for a route. `extraUrls` are always
- * included (e.g. env.PODIUM_APP_URL, env.BETTER_AUTH_URL) -- these are the
- * real production origins. Local dev origins are appended only when
- * NODE_ENV !== "production".
+ * Builds the allowed-origins set for a route. `extraUrls` and `ALLOWED_ORIGINS`
+ * are always included (e.g. env.ALLOWED_ORIGINS, env.PODIUM_APP_URL, env.BETTER_AUTH_URL).
+ * Local dev origins are appended in development or when no explicit production origins are specified.
  */
 export function buildAllowedOrigins(...extraUrls: (string | null | undefined)[]): Set<string> {
-  const urls = process.env.NODE_ENV === "production" ? extraUrls : [...extraUrls, ...getLocalDevOrigins()];
-  return new Set(
-    urls.map(getOriginFromUrl).filter((origin): origin is string => origin !== null),
-  );
+  const envOrigins = parseConfiguredOrigins(process.env.ALLOWED_ORIGINS);
+  const extraConfigured = extraUrls.map(getOriginFromUrl).filter((origin): origin is string => origin !== null);
+  
+  const allOrigins = new Set<string>([
+    ...envOrigins,
+    ...extraConfigured,
+  ]);
+
+  if (process.env.NODE_ENV !== "production" || allOrigins.size === 0) {
+    for (const devOrigin of getLocalDevOrigins()) {
+      allOrigins.add(devOrigin);
+    }
+  }
+
+  return allOrigins;
 }
 
 export function withCorsHeaders(response: Response, request: Request, allowedOrigins: Set<string>): Response {

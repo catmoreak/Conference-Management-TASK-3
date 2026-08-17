@@ -3,11 +3,13 @@
 import { useAuth } from "~/app/_components/AuthProvider";
 import { usePathname } from "next/navigation";
 import { useLanguage } from "~/app/_components/LanguageContext";
+import { useMobileNav } from "~/app/_components/MobileNavContext";
 
 export function TopBar() {
   const { user } = useAuth();
   const pathname = usePathname();
   const { lang, setLang, t } = useLanguage();
+  const { toggle } = useMobileNav();
 
   if (!user) return null;
 
@@ -29,11 +31,22 @@ export function TopBar() {
   const firstLetter = user.name ? user.name.charAt(0).toUpperCase() : "U";
 
   return (
-    <header className="h-16 border-b border-border-soft bg-white px-6 flex items-center justify-between flex-shrink-0 shadow-sm" aria-label="Header">
-      {/* Page Title */}
-      <h2 className="text-xl font-bold text-text-primary tracking-tight">
-        {getPageTitle()}
-      </h2>
+    <header className="h-16 border-b border-border-soft bg-white px-4 sm:px-6 flex items-center justify-between flex-shrink-0 shadow-sm" aria-label="Header">
+      {/* Left Area: Mobile Menu Toggle + Page Title */}
+      <div className="flex items-center gap-3 min-w-0">
+        <button
+          onClick={toggle}
+          className="md:hidden p-2 -ml-1 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition"
+          aria-label="Open navigation menu"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <h2 className="text-lg sm:text-xl font-bold text-text-primary tracking-tight truncate">
+          {getPageTitle()}
+        </h2>
+      </div>
 
       {/* Right Actions */}
       <div className="flex items-center gap-4">

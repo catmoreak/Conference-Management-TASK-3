@@ -117,16 +117,16 @@ export default function AdminSessionsPage() {
   }
 
   return (
-    <div className="flex-1 bg-bg-primary text-text-secondary p-8">
+    <div className="flex-1 bg-bg-primary text-text-secondary p-4 sm:p-8">
       <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">{t.sessionsPage.title}</h1>
-            <p className="text-text-secondary text-sm mt-1">{t.sessionsPage.subTitle}</p>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-text-primary tracking-tight">{t.sessionsPage.title}</h1>
+            <p className="text-text-secondary text-xs sm:text-sm mt-1">{t.sessionsPage.subTitle}</p>
           </div>
           <button
             onClick={() => void fetchSessions()}
-            className="bg-bg-secondary hover:bg-white text-text-primary border border-border-soft font-semibold px-4 py-2.5 rounded-lg text-sm transition focus:outline-none focus:ring-2 focus:ring-accent-blue shadow-hard hover:shadow-hard-hover"
+            className="self-end sm:self-auto bg-bg-secondary hover:bg-white text-text-primary border border-border-soft font-semibold px-4 py-2.5 rounded-lg text-sm transition focus:outline-none focus:ring-2 focus:ring-accent-blue shadow-hard hover:shadow-hard-hover"
           >
             {t.actions.refresh}
           </button>
@@ -140,7 +140,7 @@ export default function AdminSessionsPage() {
 
         <div className="bg-bg-secondary border border-border-soft rounded-xl overflow-hidden shadow-hard-lg">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full min-w-[760px] text-left border-collapse">
               <thead>
                 <tr className="bg-white border-b border-border-soft text-text-secondary text-xs font-semibold uppercase tracking-wider">
                   <th className="px-6 py-4">{lang === "ja" ? "ユーザー" : "User"}</th>

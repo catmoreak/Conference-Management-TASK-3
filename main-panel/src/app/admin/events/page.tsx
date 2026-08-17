@@ -140,19 +140,19 @@ export default function AdminEventsPage() {
   };
 
   return (
-    <div className="flex-1 bg-bg-primary text-text-secondary p-8">
+    <div className="flex-1 bg-bg-primary text-text-secondary p-4 sm:p-8">
       <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">{t.eventsPage.title}</h1>
-            <p className="text-text-secondary text-sm mt-1">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-text-primary tracking-tight">{t.eventsPage.title}</h1>
+            <p className="text-text-secondary text-xs sm:text-sm mt-1">
               {t.eventsPage.subTitle}
             </p>
           </div>
           <button
             id="btn-create-event"
             onClick={openCreate}
-            className="bg-accent-blue hover:bg-accent-blue/90 text-white font-semibold px-4 py-2.5 rounded-lg text-sm transition shadow-hard hover:shadow-hard-hover hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0.5 active:translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent-blue"
+            className="self-end sm:self-auto bg-accent-blue hover:bg-accent-blue/90 text-white font-semibold px-4 py-2.5 rounded-lg text-sm transition shadow-hard hover:shadow-hard-hover hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0.5 active:translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent-blue"
           >
             {t.eventsPage.createEvent}
           </button>
@@ -169,8 +169,8 @@ export default function AdminEventsPage() {
         ) : (
           <div className="grid gap-4">
             {(events ?? []).map((ev) => (
-              <div key={ev.id} className="bg-bg-secondary border border-border-soft rounded-xl p-5 shadow-hard hover:shadow-hard-hover transition group">
-                <div className="flex items-start justify-between gap-4">
+              <div key={ev.id} className="bg-bg-secondary border border-border-soft rounded-xl p-4 sm:p-5 shadow-hard hover:shadow-hard-hover transition group">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-1">
                       <h2 className="text-base font-bold text-text-primary truncate">{ev.name}</h2>
@@ -192,7 +192,7 @@ export default function AdminEventsPage() {
                       <span>{ev._count.presenters} {lang === "ja" ? "発表者" : "presenter(s)"}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 mt-2 sm:mt-0">
                     <button
                       onClick={() => openEdit(ev)}
                       className="px-3 py-1.5 rounded text-xs font-semibold bg-accent-blue/10 hover:bg-accent-blue/20 text-accent-blue border border-accent-blue/30 transition shadow-hard-sm"

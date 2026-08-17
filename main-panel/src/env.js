@@ -62,6 +62,8 @@ export const env = createEnv({
     // bypass the checkin-upload rate limiter, so extractIp() only trusts it
     // up to this many hops. Set to 0 if the app is ever exposed directly.
     TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(1),
+    // Comma-separated list of allowed origins (e.g. "https://conference.devorbit.cloud,http://localhost:3000,http://localhost:5173")
+    ALLOWED_ORIGINS: z.string().optional(),
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
@@ -95,6 +97,7 @@ export const env = createEnv({
     S3_PUBLIC_BASE_URL: process.env.S3_PUBLIC_BASE_URL,
     S3_ALLOW_ANONYMOUS_PUT: process.env.S3_ALLOW_ANONYMOUS_PUT,
     TRUST_PROXY_HOPS: process.env.TRUST_PROXY_HOPS,
+    ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS,
     NODE_ENV: process.env.NODE_ENV,
     NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL,
   },

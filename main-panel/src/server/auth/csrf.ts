@@ -6,31 +6,60 @@
  * that sit outside Better Auth's handler.
  */
 
-import { getLocalDevOrigins } from "~/server/http/cors";
+import { buildAllowedOrigins, getLocalDevOrigins, getOriginFromUrl } from "~/server/http/cors";
 
-function isAllowedLocalDevOrigin(origin: string, requestUrl: URL): boolean {
-  if (process.env.NODE_ENV === "production") {
-    return false;
-  }
-
-  const allowedOrigins = new Set(getLocalDevOrigins());
+function isTrustedOrigin(origin: string, request: Request): boolean {
   const normalizedOrigin = origin.trim().toLowerCase();
-  if (allowedOrigins.has(normalizedOrigin)) {
+
+  // Allow desktop / electron apps running with null or file protocol
+  if (normalizedOrigin === "null" || normalizedOrigin.startsWith("file://")) {
     return true;
   }
 
-  const requestOrigin = requestUrl.origin.toLowerCase();
-  const requestHost = requestUrl.hostname.toLowerCase();
+  // 1. Check against all allowed origins (env.ALLOWED_ORIGINS, BETTER_AUTH_URL, PODIUM_APP_URL, and local dev)
+  const allowed = buildAllowedOrigins(process.env.BETTER_AUTH_URL, process.env.PODIUM_APP_URL);
+  for (const item of allowed) {
+    if (item.toLowerCase() === normalizedOrigin) {
+      return true;
+    }
+  }
 
+  // 2. Check internal request.url origin
+  try {
+    const requestUrl = new URL(request.url);
+    if (requestUrl.origin.toLowerCase() === normalizedOrigin) {
+      return true;
+    }
+  } catch {}
+
+  // 3. Check reverse proxy headers (e.g. AWS ALB, CloudFront, Nginx)
+  const forwardedProto = request.headers.get("x-forwarded-proto") ?? "https";
+  const forwardedHost = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  if (forwardedHost) {
+    const proto = forwardedProto.split(",")[0]?.trim() ?? "https";
+    const host = forwardedHost.split(",")[0]?.trim();
+    if (host) {
+      const forwardedOrigin = `${proto}://${host}`.toLowerCase();
+      if (forwardedOrigin === normalizedOrigin) {
+        return true;
+      }
+    }
+  }
+
+  // 4. Check local development origins and aliases (localhost, 127.0.0.1, LAN IPs)
   try {
     const originUrl = new URL(origin);
-    const sameHost = originUrl.hostname.toLowerCase() === requestHost;
-    const samePort = originUrl.port === requestUrl.port;
-    const sameMachineAlias = sameHost && samePort && requestOrigin !== normalizedOrigin;
-    return sameMachineAlias || originUrl.origin.toLowerCase() === requestOrigin;
-  } catch {
-    return false;
-  }
+    const originHost = originUrl.hostname.toLowerCase();
+    if (originHost === "localhost" || originHost === "127.0.0.1" || originHost === "::1" || originHost === "0.0.0.0") {
+      return true;
+    }
+    const localDevOrigins = new Set(getLocalDevOrigins().map((o) => o.toLowerCase()));
+    if (localDevOrigins.has(normalizedOrigin)) {
+      return true;
+    }
+  } catch {}
+
+  return false;
 }
 
 /**
@@ -61,13 +90,9 @@ export function validateCsrf(request: Request): void {
     };
   }
 
-  // Determine the trusted origin from the request URL
-  const requestUrl = new URL(request.url);
-  const trustedOrigin = requestUrl.origin;
-
   // Check origin header first
   if (origin) {
-    if (origin !== trustedOrigin && !isAllowedLocalDevOrigin(origin, requestUrl)) {
+    if (!isTrustedOrigin(origin, request)) {
       throw {
         status: 403,
         error: "CSRF validation failed: origin mismatch",
@@ -80,7 +105,7 @@ export function validateCsrf(request: Request): void {
   if (referer) {
     try {
       const refererUrl = new URL(referer);
-      if (refererUrl.origin !== trustedOrigin && !isAllowedLocalDevOrigin(refererUrl.origin, requestUrl)) {
+      if (!isTrustedOrigin(refererUrl.origin, request)) {
         throw {
           status: 403,
           error: "CSRF validation failed: referer origin mismatch",

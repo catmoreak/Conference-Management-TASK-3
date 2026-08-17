@@ -20,6 +20,7 @@ import { AuthProvider } from "~/app/_components/AuthProvider";
 import { Navbar } from "~/app/_components/Navbar";
 import { TopBar } from "~/app/_components/TopBar";
 import { LanguageProvider } from "~/app/_components/LanguageContext";
+import { MobileNavProvider } from "~/app/_components/MobileNavContext";
 
 export default function RootLayout({
   children,
@@ -33,13 +34,15 @@ export default function RootLayout({
         <LanguageProvider>
           <TRPCReactProvider>
             <AuthProvider>
-              <div className="flex h-screen overflow-hidden bg-[#F8FAFC]">
-                <Navbar />
-                <div className="flex-1 flex flex-col min-w-0 h-full">
-                  <TopBar />
-                  <main className="flex-1 overflow-y-auto">{children}</main>
+              <MobileNavProvider>
+                <div className="flex h-screen overflow-hidden bg-[#F8FAFC]">
+                  <Navbar />
+                  <div className="flex-1 flex flex-col min-w-0 h-full">
+                    <TopBar />
+                    <main className="flex-1 overflow-y-auto">{children}</main>
+                  </div>
                 </div>
-              </div>
+              </MobileNavProvider>
             </AuthProvider>
           </TRPCReactProvider>
         </LanguageProvider>

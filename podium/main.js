@@ -65,16 +65,17 @@ function createWindow() {
   Menu.setApplicationMenu(null);
   mainWindow.setMenuBarVisibility(false);
 
-  // Load backend domain (or localhost for dev)
-  const targetUrl = process.env.PODIUM_BACKEND_URL ?? 'http://localhost:5173';
-
+  // Load backend domain (or localhost for dev, or local dist/index.html for packaged app)
   if (isDev) {
-    mainWindow.loadURL(targetUrl);
+    const devUrl = process.env.PODIUM_DEV_URL ?? process.env.PODIUM_BACKEND_URL ?? 'http://localhost:5173';
+    mainWindow.loadURL(devUrl);
     if (!isKioskRequested) {
       mainWindow.webContents.openDevTools();
     }
+  } else if (process.env.PODIUM_BACKEND_URL) {
+    mainWindow.loadURL(process.env.PODIUM_BACKEND_URL);
   } else {
-    mainWindow.loadURL(targetUrl);
+    mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
   }
 
   if (!isKioskRequested) {

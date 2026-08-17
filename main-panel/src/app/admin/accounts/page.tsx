@@ -189,16 +189,16 @@ export default function AdminAccountsPage() {
   }
 
   return (
-    <div className="flex-1 bg-bg-primary text-text-secondary p-8">
+    <div className="flex-1 bg-bg-primary text-text-secondary p-4 sm:p-8">
       <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-3xl font-extrabold text-text-primary tracking-tight">{t.accountsPage.title}</h1>
-            <p className="text-text-secondary text-sm mt-1">{t.accountsPage.subTitle}</p>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-text-primary tracking-tight">{t.accountsPage.title}</h1>
+            <p className="text-text-secondary text-xs sm:text-sm mt-1">{t.accountsPage.subTitle}</p>
           </div>
           <button
             onClick={() => setIsOpen(true)}
-            className="bg-accent-blue hover:bg-accent-blue/90 text-white font-semibold px-4 py-2.5 rounded-lg text-sm transition shadow-hard hover:shadow-hard-hover active:translate-x-0.5 active:translate-y-0.5 hover:-translate-x-0.5 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent-blue"
+            className="self-end sm:self-auto bg-accent-blue hover:bg-accent-blue/90 text-white font-semibold px-4 py-2.5 rounded-lg text-sm transition shadow-hard hover:shadow-hard-hover active:translate-x-0.5 active:translate-y-0.5 hover:-translate-x-0.5 hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-accent-blue"
           >
             {t.accountsPage.createUser}
           </button>
@@ -213,7 +213,7 @@ export default function AdminAccountsPage() {
         {/* User list table */}
         <div className="bg-bg-secondary border border-border-soft rounded-xl overflow-hidden shadow-hard-lg">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+            <table className="w-full min-w-[720px] text-left border-collapse">
               <thead>
                 <tr className="bg-white border-b border-border-soft text-text-secondary text-xs font-semibold uppercase tracking-wider">
                   <th className="px-6 py-4">{t.accountsPage.name} / {t.accountsPage.email}</th>

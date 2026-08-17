@@ -184,24 +184,24 @@ export default function PresOpsDashboard() {
   };
 
   return (
-    <div className="flex-1 bg-[#F8FAFC] text-text-secondary p-8">
+    <div className="flex-1 bg-[#F8FAFC] text-text-secondary p-4 sm:p-8">
       <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-[#0B1220] tracking-tight">{t.presOpsDashboard.title}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-[#0B1220] tracking-tight">{t.presOpsDashboard.title}</h1>
             <p className="text-gray-500 text-xs mt-1">
               {t.presOpsDashboard.subTitle}
             </p>
           </div>
           <button
             onClick={() => void signOut()}
-            className="bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-semibold px-4 py-2.5 rounded-xl text-sm transition shadow-sm"
+            className="self-end sm:self-auto bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-semibold px-4 py-2 rounded-xl text-xs sm:text-sm transition shadow-sm"
           >
             {t.signOut}
           </button>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4 mb-6">
+        <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 shadow-sm space-y-4 mb-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2" htmlFor="ev-select">

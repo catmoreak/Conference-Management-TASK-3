@@ -1,12 +1,25 @@
 import React, { useEffect, useRef, useState } from "react";
 import { CheckCircle2, AlertTriangle, XCircle, LogIn, Power, ShieldCheck, Upload, Cast, Zap, FileStack } from "lucide-react";
 
-import { authClient, getAuthErrorMessage, getDisplayRole, mainPanelAuthUrl } from "./lib/auth";
+import { authClient, getAuthErrorMessage, getDisplayRole, mainPanelAuthUrl, setSavedMainPanelUrl } from "./lib/auth";
 import { translations, LANG_STORAGE_KEY } from "./lib/i18n";
 import { WebSocketClient } from "./websocket/WebSocketClient";
 import { IpcPresentationController } from "./presentation/IpcPresentationController";
 
 function getDefaultWsUrl() {
+  if (import.meta.env.VITE_WS_URL) {
+    return import.meta.env.VITE_WS_URL;
+  }
+  if (mainPanelAuthUrl) {
+    try {
+      const panelUrl = new URL(mainPanelAuthUrl);
+      const wsProto = panelUrl.protocol === "https:" ? "wss:" : "ws:";
+      if (panelUrl.hostname === "localhost" || panelUrl.hostname === "127.0.0.1") {
+        return `${wsProto}//${panelUrl.hostname}:4001`;
+      }
+      return `${wsProto}//${panelUrl.host}`;
+    } catch {}
+  }
   if (typeof window !== "undefined") {
     const host = window.location.hostname;
     if (host && host !== "localhost" && host !== "127.0.0.1") {
@@ -17,7 +30,7 @@ function getDefaultWsUrl() {
   return "ws://localhost:4001";
 }
 
-const wsUrl = (import.meta.env.VITE_WS_URL ?? getDefaultWsUrl()).replace(/\/+$/, "");
+const wsUrl = getDefaultWsUrl().replace(/\/+$/, "");
 
 function AuthField({ label, id, type, value, onChange, placeholder, autoComplete, disabled }) {
   return (
@@ -619,7 +632,35 @@ export default function App() {
             {t.heroSubtitle}
             </p>
 
-            <p className="server-note">{t.server}: {mainPanelAuthUrl}</p>
+            <div className="server-select-wrap" style={{ marginTop: 20 }}>
+              <label style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)", display: "block", marginBottom: 6 }}>
+                {t.server}:
+              </label>
+              <select
+                aria-label="Select Server Backend"
+                value={mainPanelAuthUrl}
+                onChange={(e) => setSavedMainPanelUrl(e.target.value)}
+                style={{
+                  background: "rgba(255,255,255,0.08)",
+                  border: "1px solid rgba(255,255,255,0.25)",
+                  color: "#fff",
+                  padding: "7px 12px",
+                  borderRadius: "8px",
+                  fontSize: "12px",
+                  outline: "none",
+                  cursor: "pointer",
+                  width: "100%",
+                  maxWidth: "340px",
+                }}
+              >
+                <option value="http://localhost:3000" style={{ background: "#0B1220", color: "#fff" }}>
+                  Local Dev (http://localhost:3000)
+                </option>
+                <option value="https://conference.devorbit.cloud" style={{ background: "#0B1220", color: "#fff" }}>
+                  AWS Cloud (https://conference.devorbit.cloud)
+                </option>
+              </select>
+            </div>
           </section>
 
           <section className="login-panel">

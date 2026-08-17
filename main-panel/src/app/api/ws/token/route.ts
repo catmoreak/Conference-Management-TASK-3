@@ -23,9 +23,8 @@ const authzStore = new PrismaAuthzStore();
 // a "display" token -- same allowlist pattern already used by
 // /api/uploads for the same reason.
 
-const allowedOrigins = buildAllowedOrigins(env.PODIUM_APP_URL, env.BETTER_AUTH_URL);
-
 export async function OPTIONS(request: Request): Promise<Response> {
+  const allowedOrigins = buildAllowedOrigins(env.PODIUM_APP_URL, env.BETTER_AUTH_URL);
   const origin = request.headers.get("origin");
   const headers = new Headers();
   headers.set("Vary", "Origin, Access-Control-Request-Headers");
@@ -78,13 +77,9 @@ const DEFAULT_WS_TOKEN_TTL = 120;
  *   { token: string, expiresIn: number }
  */
 export async function POST(request: Request) {
+  const allowedOrigins = buildAllowedOrigins(env.PODIUM_APP_URL, env.BETTER_AUTH_URL);
   try {
     // ── CSRF / cross-origin ─────────────────────────────────────────
-    // Same-origin calls (the pres-ops dashboard itself) keep the strict
-    // origin===request-URL-origin check. podium calls this cross-origin
-    // to mint a "display" token, so an explicit allowlist substitutes for
-    // that check when the Origin header names a known trusted app --
-    // exactly the same posture /api/uploads already uses.
     const requestOrigin = request.headers.get("origin");
     if (requestOrigin && !allowedOrigins.has(requestOrigin)) {
       return withCorsHeaders(
@@ -93,9 +88,7 @@ export async function POST(request: Request) {
         allowedOrigins,
       );
     }
-    if (!requestOrigin || getOriginFromUrl(env.BETTER_AUTH_URL) === requestOrigin) {
-      validateCsrf(request);
-    }
+    validateCsrf(request);
 
     // ── Authentication ───────────────────────────────────────────────
     const session = await getSession();
