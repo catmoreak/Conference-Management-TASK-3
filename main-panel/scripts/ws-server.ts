@@ -131,7 +131,8 @@ function notifyControlOfDisplayCount(room: Room, liveSessionId: string): void {
 // treated as a health check -- lets a load balancer or uptime monitor
 // point at this process without a separate port.
 httpServer.on("request", (req, res) => {
-  if (req.url === "/health" || req.url === "/") {
+  const requestPath = (req.url ?? "").split("?")[0] ?? "";
+  if (requestPath === "/" || requestPath === "/health" || requestPath === "/ws" || requestPath === "/ws/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ status: "ok", rooms: rooms.size }));
     return;
