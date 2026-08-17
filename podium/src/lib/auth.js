@@ -24,6 +24,9 @@ export const mainPanelAuthUrl = getSavedMainPanelUrl();
 
 export const authClient = createAuthClient({
   baseURL: mainPanelAuthUrl,
+  fetchOptions: {
+    credentials: "include",
+  },
   plugins: [twoFactorClient()],
 });
 

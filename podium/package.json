@@ -31,7 +31,7 @@
   },
   "build": {
     "appId": "com.podium.electron",
-    "productName": "Podium",
+    "productName": "Conference Podium",
     "directories": {
       "output": "release"
     },

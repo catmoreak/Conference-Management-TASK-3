@@ -35,7 +35,9 @@ export const auth = betterAuth({
     defaultCookieAttributes: {
       secure: env.NODE_ENV === "production",
       httpOnly: true,
-      sameSite: "lax",
+      // Podium desktop app authenticates cross-origin (file:// / null origin),
+      // so session cookies must be sent in cross-site requests in production.
+      sameSite: env.NODE_ENV === "production" ? "none" : "lax",
     },
   },
 
