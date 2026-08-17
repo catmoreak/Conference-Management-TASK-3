@@ -19,6 +19,7 @@
     "lint:fix": "next lint --fix",
     "preview": "next build && next start",
     "start": "next start",
+    "start:with-ws": "sh -c 'npm run ws:start & npm run start'",
     "seed:admin": "tsx scripts/seed-admin.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",

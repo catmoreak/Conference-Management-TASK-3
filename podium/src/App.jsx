@@ -14,10 +14,10 @@ function getDefaultWsUrl() {
     try {
       const panelUrl = new URL(mainPanelAuthUrl);
       const wsProto = panelUrl.protocol === "https:" ? "wss:" : "ws:";
-      if (panelUrl.hostname === "localhost" || panelUrl.hostname === "127.0.0.1") {
-        return `${wsProto}//${panelUrl.hostname}:4001`;
+      if (panelUrl.port) {
+        return `${wsProto}//${panelUrl.host}`;
       }
-      return `${wsProto}//${panelUrl.host}`;
+      return `${wsProto}//${panelUrl.hostname}:4001`;
     } catch {}
   }
   if (typeof window !== "undefined") {
@@ -72,6 +72,7 @@ export default function App() {
   const [displaySessionId, setDisplaySessionId] = useState("");
   const [displayState, setDisplayState] = useState("disconnected");
   const wsClientRef = useRef(null);
+  const connectTimeoutRef = useRef(null);
 
   const [sessionFiles, setSessionFiles] = useState([]);
   const [sessionFilesLoading, setSessionFilesLoading] = useState(false);
@@ -90,6 +91,13 @@ export default function App() {
 
   const setNotificationMessage = (type, message) => {
     setNotification({ type, message });
+  };
+
+  const clearConnectTimeout = () => {
+    if (connectTimeoutRef.current !== null) {
+      window.clearTimeout(connectTimeoutRef.current);
+      connectTimeoutRef.current = null;
+    }
   };
 
   useEffect(() => {
@@ -308,6 +316,7 @@ export default function App() {
 
   useEffect(() => {
     return () => {
+      clearConnectTimeout();
       wsClientRef.current?.disconnect();
     };
   }, []);
@@ -486,32 +495,47 @@ export default function App() {
           // UI stuck showing "connected" while operator commands have
           // nowhere to go).
           onAuthSuccess: () => {
+            clearConnectTimeout();
             setDisplayState("connected");
             setNotificationMessage("success", t.notif.connectedAsDisplay);
           },
           onAuthError: (code, message) => {
+            clearConnectTimeout();
             setDisplayState("error");
             setNotificationMessage("error", `${t.notif.failedToConnect}: ${message} (${code})`);
             wsClientRef.current?.disconnect();
             wsClientRef.current = null;
           },
           onClose: () => {
+            clearConnectTimeout();
             setDisplayState((prev) => (prev === "connected" || prev === "connecting" ? "disconnected" : prev));
           },
           onSocketError: () => {
+            clearConnectTimeout();
             setDisplayState("error");
           },
         },
       );
       wsClientRef.current = client;
       client.connect();
+      clearConnectTimeout();
+      connectTimeoutRef.current = window.setTimeout(() => {
+        if (wsClientRef.current === client) {
+          wsClientRef.current?.disconnect();
+          wsClientRef.current = null;
+          setDisplayState("error");
+          setNotificationMessage("error", `${t.notif.failedToConnect}: WebSocket timeout (${wsUrl})`);
+        }
+      }, 12000);
     } catch (err) {
+      clearConnectTimeout();
       setDisplayState("error");
       setNotificationMessage("error", getAuthErrorMessage(err, t.notif.failedToConnect));
     }
   };
 
   const handleDisconnectDisplay = () => {
+    clearConnectTimeout();
     wsClientRef.current?.disconnect();
     wsClientRef.current = null;
     setDisplayState("disconnected");

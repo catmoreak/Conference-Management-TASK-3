@@ -37,5 +37,6 @@ COPY --from=builder /app/generated ./generated
 COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3000
+EXPOSE 4001
 
-CMD ["npm", "run", "start"]
+CMD ["npm", "run", "start:with-ws"]
