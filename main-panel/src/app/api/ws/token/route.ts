@@ -52,6 +52,31 @@ const mintTokenSchema = z.object({
 /** Default TTL for WebSocket connect tokens (seconds). */
 const DEFAULT_WS_TOKEN_TTL = 120;
 
+function normalizeDesktopCsrfRequest(request: Request): Request {
+  const origin = request.headers.get("origin");
+  const referer = request.headers.get("referer");
+  if (origin || referer) {
+    return request;
+  }
+
+  const userAgent = (request.headers.get("user-agent") ?? "").toLowerCase();
+  if (!userAgent.includes("electron")) {
+    return request;
+  }
+
+  const fallbackOrigin =
+    getOriginFromUrl(env.BETTER_AUTH_URL) ??
+    getOriginFromUrl(env.PODIUM_APP_URL);
+  if (!fallbackOrigin) {
+    return request;
+  }
+
+  const headers = new Headers(request.headers);
+  headers.set("origin", fallbackOrigin);
+  headers.set("referer", `${fallbackOrigin}/`);
+  return new Request(request, { headers });
+}
+
 // ── Route handler ────────────────────────────────────────────────────────
 
 /**
@@ -78,24 +103,27 @@ const DEFAULT_WS_TOKEN_TTL = 120;
  */
 export async function POST(request: Request) {
   const allowedOrigins = buildAllowedOrigins(env.PODIUM_APP_URL, env.BETTER_AUTH_URL);
+  let normalizedRequest = request;
   try {
+    normalizedRequest = normalizeDesktopCsrfRequest(request);
+
     // ── CSRF / cross-origin ─────────────────────────────────────────
-    const requestOrigin = request.headers.get("origin");
+    const requestOrigin = normalizedRequest.headers.get("origin");
     if (requestOrigin && !isAllowedOrigin(requestOrigin, allowedOrigins)) {
       return withCorsHeaders(
         NextResponse.json({ error: "Forbidden origin" }, { status: 403 }),
-        request,
+        normalizedRequest,
         allowedOrigins,
       );
     }
-    validateCsrf(request);
+    validateCsrf(normalizedRequest);
 
     // ── Authentication ───────────────────────────────────────────────
     const session = await getSession();
     if (!session?.user) {
       return withCorsHeaders(
         NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
-        request,
+        normalizedRequest,
         allowedOrigins,
       );
     }
@@ -129,7 +157,7 @@ export async function POST(request: Request) {
     });
 
     // ── Input validation ─────────────────────────────────────────────
-    const body: unknown = await request.json();
+    const body: unknown = await normalizedRequest.json();
     const parsed = mintTokenSchema.safeParse(body);
     if (!parsed.success) {
       return withCorsHeaders(
@@ -137,7 +165,7 @@ export async function POST(request: Request) {
           { error: "Validation failed", details: parsed.error.flatten() },
           { status: 400 },
         ),
-        request,
+        normalizedRequest,
         allowedOrigins,
       );
     }
@@ -157,7 +185,7 @@ export async function POST(request: Request) {
     if (!liveSession) {
       return withCorsHeaders(
         NextResponse.json({ error: "Live session not found" }, { status: 404 }),
-        request,
+        normalizedRequest,
         allowedOrigins,
       );
     }
@@ -193,7 +221,7 @@ export async function POST(request: Request) {
         token,
         expiresIn: DEFAULT_WS_TOKEN_TTL,
       }),
-      request,
+      normalizedRequest,
       allowedOrigins,
     );
   } catch (error: unknown) {
@@ -203,7 +231,7 @@ export async function POST(request: Request) {
     if (err.status) {
       return withCorsHeaders(
         NextResponse.json({ error: err.error ?? err.message }, { status: err.status }),
-        request,
+        normalizedRequest,
         allowedOrigins,
       );
     }
@@ -211,7 +239,7 @@ export async function POST(request: Request) {
     console.error("[ws/token] Error:", error);
     return withCorsHeaders(
       NextResponse.json({ error: "Internal server error" }, { status: 500 }),
-      request,
+      normalizedRequest,
       allowedOrigins,
     );
   }
