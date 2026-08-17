@@ -30,6 +30,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 COPY --from=builder /app/next.config.js ./next.config.js
+COPY --from=builder /app/server.ts ./server.ts
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/public ./public
@@ -40,4 +41,4 @@ COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3000
 
-CMD ["npm", "run", "start:server"]
+CMD ["npm", "run", "start"]
