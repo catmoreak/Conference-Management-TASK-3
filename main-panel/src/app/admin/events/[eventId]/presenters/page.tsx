@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "~/trpc/react";
@@ -22,8 +22,13 @@ export default function PresentersPage() {
   const [formStatus, setFormStatus] = useState<"active" | "inactive">("active");
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    if (!user || (user.role !== "admin" && user.role !== "reviewer")) {
+      router.replace("/");
+    }
+  }, [user, router]);
+
   if (!user || (user.role !== "admin" && user.role !== "reviewer")) {
-    router.replace("/");
     return null;
   }
 
@@ -134,7 +139,6 @@ export default function PresentersPage() {
               <thead>
                 <tr className="bg-white border-b border-border-soft text-text-secondary text-xs font-semibold uppercase tracking-wider">
                   <th className="px-6 py-4">{t.accountsPage.name}</th>
-                  <th className="px-6 py-4">{t.accountsPage.email}</th>
                   <th className="px-6 py-4">{t.accountsPage.status}</th>
                   <th className="px-6 py-4">{lang === "ja" ? "担当セッション数" : "Assignments"}</th>
                   <th className="px-6 py-4 text-right">{t.actions.actions}</th>
@@ -144,7 +148,6 @@ export default function PresentersPage() {
                 {(presenters ?? []).map((p) => (
                   <tr key={p.id} className="hover:bg-white transition">
                     <td className="px-6 py-4 font-semibold text-text-primary">{p.name}</td>
-                    <td className="px-6 py-4 text-text-secondary">{p.email}</td>
                     <td className="px-6 py-4 text-text-secondary">{p.status === "active" ? t.accountsPage.active : p.status}</td>
                     <td className="px-6 py-4 text-text-secondary">{p._count?.presentationAssignments ?? 0}</td>
                     <td className="px-6 py-4 text-right">
@@ -171,7 +174,7 @@ export default function PresentersPage() {
                 ))}
                 {(presenters ?? []).length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-10 text-center text-text-muted">{lang === "ja" ? "このイベントには発表者がまだ登録されていません。" : "No presenters yet for this event."}</td>
+                    <td colSpan={4} className="px-6 py-10 text-center text-text-muted">{lang === "ja" ? "このイベントには発表者がまだ登録されていません。" : "No presenters yet for this event."}</td>
                   </tr>
                 )}
               </tbody>

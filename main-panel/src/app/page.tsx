@@ -19,7 +19,7 @@ export default async function Home() {
   if (role === "admin") {
     redirect("/admin/accounts");
   } else if (role === "reviewer") {
-    redirect("/audit-logs");
+    redirect("/dashboard/staff");
   } else {
     // presenter or other roles
     redirect("/podium");

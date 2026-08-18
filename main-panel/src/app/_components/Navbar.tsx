@@ -90,32 +90,18 @@ export function Navbar() {
             </>
           )}
           {(user.role === "admin" || user.role === "reviewer") && (
-            <>
-              <Link
-                href="/admin/events"
-                onClick={close}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#10B981] ${
-                  isActive("/admin/events") ? "bg-[#F1F5F9] text-gray-900" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                }`}
-              >
-                <svg className={`w-5 h-5 ${isActive("/admin/events") ? "text-[#10B981]" : "text-gray-400"}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-                {t.nav.events}
-              </Link>
-              <Link
-                href="/audit-logs"
-                onClick={close}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#10B981] ${
-                  isActive("/audit-logs") ? "bg-[#F1F5F9] text-gray-900" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                }`}
-              >
-                <svg className={`w-5 h-5 ${isActive("/audit-logs") ? "text-[#10B981]" : "text-gray-400"}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                {t.nav.auditLogs}
-              </Link>
-            </>
+            <Link
+              href="/admin/events"
+              onClick={close}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#10B981] ${
+                isActive("/admin/events") ? "bg-[#F1F5F9] text-gray-900" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+              }`}
+            >
+              <svg className={`w-5 h-5 ${isActive("/admin/events") ? "text-[#10B981]" : "text-gray-400"}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+              {t.nav.events}
+            </Link>
           )}
           <Link
             href="/dashboard/files"
