@@ -539,7 +539,7 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [lang, setLangState] = useState<Language>("en");
+  const [lang, setLangState] = useState<Language>("ja");
 
   useEffect(() => {
     const savedLang = localStorage.getItem(LANG_STORAGE_KEY) as Language | null;
@@ -553,7 +553,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(LANG_STORAGE_KEY, newLang);
   };
 
-  const t = translations[lang] ?? translations.en;
+  const t = translations[lang] ?? translations.ja;
 
   return (
     <LanguageContext.Provider value={{ lang, setLang, t }}>

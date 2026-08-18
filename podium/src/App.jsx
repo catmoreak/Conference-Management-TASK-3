@@ -61,7 +61,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [statusKey, setStatusKey] = useState("signIn");
   const [notification, setNotification] = useState(null);
-  const [lang, setLang] = useState(() => localStorage.getItem(LANG_STORAGE_KEY) || "en");
+  const [lang, setLang] = useState(() => localStorage.getItem(LANG_STORAGE_KEY) || "ja");
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploadedItems, setUploadedItems] = useState([]);
   const [openingFile, setOpeningFile] = useState(false);
