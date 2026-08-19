@@ -63,14 +63,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setUser(null);
         // Reactive redirect to login on unauthenticated
-        if (!pathname.startsWith("/auth/login")) {
+        if (
+          !pathname.startsWith("/auth/login") &&
+          !pathname.startsWith("/checkin") &&
+          !pathname.startsWith("/upload")
+        ) {
           router.replace("/auth/login");
         }
       }
     } catch (err) {
       console.error("Error retrieving session:", err);
       setUser(null);
-      if (!pathname.startsWith("/auth/login")) {
+      if (
+        !pathname.startsWith("/auth/login") &&
+        !pathname.startsWith("/checkin") &&
+        !pathname.startsWith("/upload")
+      ) {
         router.replace("/auth/login");
       }
     } finally {
@@ -101,7 +109,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } else {
         setUser(null);
-        if (!pathname.startsWith("/auth/login")) {
+        if (
+          !pathname.startsWith("/auth/login") &&
+          !pathname.startsWith("/checkin") &&
+          !pathname.startsWith("/upload")
+        ) {
           router.replace("/auth/login");
         }
       }

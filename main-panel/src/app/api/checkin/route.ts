@@ -51,49 +51,69 @@ export async function GET(request: Request) {
     const eventId = searchParams.get("eventId");
 
     if (eventId) {
-      // Return presenters for the selected event
-      const presenters = await db.presenter.findMany({
-        where: { eventId },
-        orderBy: [
-          { organization: "asc" },
-          { displayName: "asc" },
-        ],
-        select: {
-          id: true,
-          displayName: true,
-          organization: true,
-          title: true,
-          presentationAssignments: {
-            select: {
-              id: true,
-              liveSession: {
-                select: {
-                  id: true,
-                  name: true,
-                  startsAt: true,
-                  room: { select: { name: true } },
+      // Return presenters, sessions, and rooms for the selected event
+      const [presenters, sessions, rooms] = await Promise.all([
+        db.presenter.findMany({
+          where: { eventId },
+          orderBy: [
+            { organization: "asc" },
+            { displayName: "asc" },
+          ],
+          select: {
+            id: true,
+            displayName: true,
+            organization: true,
+            title: true,
+            presentationAssignments: {
+              select: {
+                id: true,
+                liveSession: {
+                  select: {
+                    id: true,
+                    name: true,
+                    startsAt: true,
+                    room: { select: { name: true } },
+                  },
                 },
               },
             },
-          },
-          // Most recent non-deleted submission -- lets the kiosk tell a
-          // returning presenter their status (and rejection reason, if
-          // any) instead of them re-uploading blind.
-          submissions: {
-            where: { deletedAt: null },
-            orderBy: { createdAt: "desc" },
-            take: 1,
-            select: {
-              id: true,
-              status: true,
-              fileName: true,
-              reviewNote: true,
-              createdAt: true,
+            // Most recent non-deleted submission -- lets the kiosk tell a
+            // returning presenter their status (and rejection reason, if
+            // any) instead of them re-uploading blind.
+            submissions: {
+              where: { deletedAt: null },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: {
+                id: true,
+                status: true,
+                fileName: true,
+                reviewNote: true,
+                createdAt: true,
+              },
             },
           },
-        },
-      });
-      return withCorsHeaders(NextResponse.json({ presenters }), request, allowedOrigins);
+        }),
+        db.liveSession.findMany({
+          where: { eventId, deletedAt: null },
+          orderBy: [{ sortOrder: "asc" }, { startsAt: "asc" }],
+          select: {
+            id: true,
+            name: true,
+            roomId: true,
+            room: { select: { id: true, name: true } },
+            startsAt: true,
+            endsAt: true,
+          },
+        }),
+        db.room.findMany({
+          where: { eventId, status: "active" },
+          orderBy: { sortOrder: "asc" },
+          select: { id: true, name: true },
+        }),
+      ]);
+
+      return withCorsHeaders(NextResponse.json({ presenters, sessions, rooms }), request, allowedOrigins);
     }
 
     // Return list of active events

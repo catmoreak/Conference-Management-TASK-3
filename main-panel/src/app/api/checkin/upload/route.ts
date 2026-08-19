@@ -50,6 +50,9 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const file = formData.get("file");
     const presenterId = formData.get("presenterId");
+    const rawLiveSessionId = formData.get("liveSessionId");
+    const explicitLiveSessionId =
+      typeof rawLiveSessionId === "string" && rawLiveSessionId ? rawLiveSessionId : null;
 
     if (typeof presenterId !== "string" || !presenterId) {
       return NextResponse.json({ error: "presenterId is required" }, { status: 400 });
@@ -71,10 +74,12 @@ export async function POST(request: Request) {
       where: { id: presenterId },
       include: {
         event: true,
+        // Fetch all assignments so we can validate an explicit liveSessionId.
+        // When no explicit session is provided, [0] is still the legacy
+        // fallback (same sort order as before, just no longer capped).
         presentationAssignments: {
           select: { liveSessionId: true },
           orderBy: { sortOrder: "asc" },
-          take: 1,
         },
       },
     });
@@ -86,14 +91,62 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "This event is not open for check-in" }, { status: 403 });
     }
 
+    // Resolve which live session this upload belongs to.
+    let liveSessionId: string | null;
+    if (explicitLiveSessionId) {
+      // Check if session belongs to the presenter's event
+      const targetSession = await db.liveSession.findFirst({
+        where: { id: explicitLiveSessionId, eventId: presenter.eventId, deletedAt: null },
+      });
+      if (!targetSession) {
+        return NextResponse.json({ error: "Session not found for this event" }, { status: 400 });
+      }
+
+      if (presenter.presentationAssignments.length === 0) {
+        // Presenter has no assignments yet — automatically create the assignment for this session
+        await db.presentationAssignment.create({
+          data: {
+            id: crypto.randomUUID(),
+            liveSessionId: explicitLiveSessionId,
+            presenterId: presenter.id,
+            sortOrder: 0,
+          },
+        });
+      } else {
+        // Validate the presenter is assigned to this specific session
+        const hasAssignment = presenter.presentationAssignments.some(
+          (a) => a.liveSessionId === explicitLiveSessionId,
+        );
+        if (!hasAssignment) {
+          return NextResponse.json(
+            { error: "Presenter is not assigned to this session" },
+            { status: 400 },
+          );
+        }
+      }
+      liveSessionId = explicitLiveSessionId;
+    } else {
+      // Legacy fallback: first assignment by sort order (backward compat
+      // for /checkin/page.tsx callers that don't pass liveSessionId).
+      liveSessionId = presenter.presentationAssignments[0]?.liveSessionId ?? null;
+    }
+
     // A presenter re-uploading (e.g. after a rejection) replaces the file
     // on their existing submission instead of creating an orphaned
-    // duplicate row. "approved" is terminal in the state machine -- pres-ops
-    // may already be relying on that file for a live session, so reopening
-    // it needs staff, not a kiosk re-upload. Fail fast here, before the S3
-    // write, so an already-approved presenter doesn't waste an upload.
+    // duplicate row. When an explicit session is provided, scope the
+    // lookup to that session so each session slot has its own independent
+    // submission lifecycle. Without an explicit session, fall back to the
+    // original cross-session lookup for backward compatibility.
+    // "approved" is terminal in the state machine -- pres-ops may already
+    // be relying on that file for a live session, so reopening it needs
+    // staff, not a kiosk re-upload. Fail fast here, before the S3 write,
+    // so an already-approved presenter doesn't waste an upload.
     const existingSubmission = await db.submission.findFirst({
-      where: { presenterId: presenter.id, deletedAt: null },
+      where: {
+        presenterId: presenter.id,
+        deletedAt: null,
+        ...(explicitLiveSessionId ? { liveSessionId: explicitLiveSessionId } : {}),
+      },
       orderBy: { createdAt: "desc" },
     });
     if (existingSubmission?.status === "approved") {
@@ -151,7 +204,7 @@ export async function POST(request: Request) {
     // operators fetch a short-lived presigned URL on demand instead, via
     // /api/downloads (staff dashboard "View") and
     // /api/submissions/[id]/playback-url (pres-ops "Load").
-    const liveSessionId = presenter.presentationAssignments[0]?.liveSessionId ?? null;
+    // liveSessionId was resolved earlier (explicit or legacy fallback).
     const fileFields = {
       liveSessionId,
       objectKey: uploaded.objectKey,
