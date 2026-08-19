@@ -87,6 +87,18 @@ export function Navbar() {
                 </svg>
                 {t.nav.clients}
               </Link>
+              <Link
+                href="/audit-logs"
+                onClick={close}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-[#10B981] ${
+                  isActive("/audit-logs") ? "bg-[#F1F5F9] text-gray-900" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                }`}
+              >
+                <svg className={`w-5 h-5 ${isActive("/audit-logs") ? "text-[#10B981]" : "text-gray-400"}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                {t.nav.auditLogs}
+              </Link>
             </>
           )}
           {(user.role === "admin" || user.role === "reviewer") && (
@@ -116,9 +128,15 @@ export function Navbar() {
             {t.nav.files}
           </Link>
           {user.role === "presenter" && (
-            <div className="mt-4 px-4 py-2 bg-[#10B981]/10 border border-[#10B981]/30 rounded-xl text-xs font-semibold text-[#10B981] shadow-sm">
+            <Link
+              href="/dashboard/pres-ops"
+              onClick={close}
+              className={`mt-4 flex items-center justify-center px-4 py-2.5 bg-[#10B981]/10 hover:bg-[#10B981]/20 border border-[#10B981]/30 rounded-xl text-xs font-semibold text-[#10B981] shadow-sm transition focus:outline-none focus:ring-2 focus:ring-[#10B981] ${
+                isActive("/dashboard/pres-ops") ? "bg-[#10B981]/25 ring-2 ring-[#10B981]" : ""
+              }`}
+            >
               {t.presenterModeHint}
-            </div>
+            </Link>
           )}
         </div>
 
