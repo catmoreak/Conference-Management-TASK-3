@@ -8,6 +8,8 @@ import { db } from "~/server/db";
 import { writeAuditLog, extractIp, extractUserAgent } from "~/server/auth/audit";
 import { buildAllowedOrigins } from "~/server/http/cors";
 
+const TAG = "[AUTH-DEBUG]";
+
 export const auth = betterAuth({
   appName: "Conference Management",
   baseURL: env.BETTER_AUTH_URL ?? "http://localhost:3000",
@@ -114,6 +116,63 @@ export const auth = betterAuth({
 
   // ── Request lifecycle hooks (audit logging) ─────────────────────────
   hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      const path = ctx.path;
+
+      if (path === "/sign-in/email") {
+        // Extract email from request body for diagnostics
+        let attemptedEmail: string | null = null;
+        try {
+          const body = ctx.body as { email?: string } | undefined;
+          attemptedEmail = body?.email ?? null;
+        } catch {
+          // body not available — ignore
+        }
+
+        console.log(
+          TAG,
+          "sign-in attempt:",
+          JSON.stringify({ email: attemptedEmail, ip: extractIp(ctx.headers ?? new Headers()) }),
+        );
+
+        if (attemptedEmail) {
+          // Check DB directly so we can report the exact failure cause
+          const dbUser = await db.user.findFirst({
+            where: { email: attemptedEmail },
+            select: { id: true, email: true, role: true, status: true, banned: true, emailVerified: true },
+          });
+
+          if (!dbUser) {
+            console.warn(
+              TAG,
+              `sign-in REJECTED — no user row found for email "${attemptedEmail}" in the database`,
+            );
+          } else {
+            console.log(
+              TAG,
+              "sign-in DB lookup — user found:",
+              JSON.stringify({
+                id: dbUser.id,
+                email: dbUser.email,
+                role: dbUser.role,
+                status: dbUser.status,
+                banned: dbUser.banned,
+                emailVerified: dbUser.emailVerified,
+              }),
+            );
+
+            if (dbUser.banned) {
+              console.warn(TAG, `sign-in REJECTED — user "${attemptedEmail}" is banned`);
+            } else if (dbUser.status === "suspended") {
+              console.warn(TAG, `sign-in REJECTED — user "${attemptedEmail}" is suspended`);
+            } else if (!dbUser.emailVerified) {
+              console.warn(TAG, `sign-in NOTE — user "${attemptedEmail}" email is NOT verified`);
+            }
+          }
+        }
+      }
+    }),
+
     after: createAuthMiddleware(async (ctx) => {
       const hdrs = ctx.headers ?? new Headers();
       const ip = extractIp(hdrs);
@@ -126,11 +185,24 @@ export const auth = betterAuth({
 
       if (path === "/sign-in/email") {
         const userId = ctx.context?.newSession?.user?.id ?? null;
+        const sessionId = ctx.context?.newSession?.session?.id ?? null;
+
+        console.log(
+          TAG,
+          responseOk ? "sign-in SUCCESS" : "sign-in FAILURE",
+          JSON.stringify({
+            userId,
+            sessionId,
+            responseStatus: returned?.status ?? "(no status)",
+            ip,
+          }),
+        );
+
         await writeAuditLog({
           actor_id: userId,
           action: responseOk ? "LOGIN_SUCCESS" : "LOGIN_FAILURE",
           target_type: "session",
-          target_id: ctx.context?.newSession?.session?.id ?? null,
+          target_id: sessionId,
           ip,
           user_agent: ua,
           result: responseOk ? "success" : "failure",

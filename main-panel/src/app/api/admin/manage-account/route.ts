@@ -240,6 +240,12 @@ export async function POST(request: Request) {
       });
 
       if (!targetUser) {
+        console.warn("[manage-account] User not found for role change", {
+          actorUserId: session.user.id,
+          targetUserId: userId,
+          action: "change-role",
+          requestUrl: request.url,
+        });
         return NextResponse.json({ error: "User not found" }, { status: 404 });
       }
 

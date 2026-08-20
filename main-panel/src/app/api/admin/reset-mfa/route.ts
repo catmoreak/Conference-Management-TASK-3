@@ -70,6 +70,12 @@ export async function POST(request: Request) {
     });
 
     if (!targetUser) {
+      console.warn("[reset-mfa] User not found", {
+        actorUserId: session.user.id,
+        targetUserId: userId,
+        revokeAllSessions,
+        requestUrl: request.url,
+      });
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 

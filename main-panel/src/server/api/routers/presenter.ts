@@ -140,6 +140,11 @@ export const presenterRouter = createTRPCRouter({
       if (input.userId) {
         const user = await ctx.db.user.findUnique({ where: { id: input.userId } });
         if (!user) {
+          console.warn("[trpc.presenter.create] User not found for presenter link", {
+            actorUserId: String((ctx.session.user.id as string | undefined) ?? ""),
+            eventId: input.eventId,
+            targetUserId: input.userId,
+          });
           throw new TRPCError({ code: "BAD_REQUEST", message: "User not found" });
         }
       }
@@ -197,6 +202,11 @@ export const presenterRouter = createTRPCRouter({
       if (data.userId !== undefined && data.userId !== null) {
         const user = await ctx.db.user.findUnique({ where: { id: data.userId } });
         if (!user) {
+          console.warn("[trpc.presenter.update] User not found for presenter link", {
+            actorUserId: String((ctx.session.user.id as string | undefined) ?? ""),
+            presenterId: id,
+            targetUserId: data.userId,
+          });
           throw new TRPCError({ code: "BAD_REQUEST", message: "User not found" });
         }
       }
