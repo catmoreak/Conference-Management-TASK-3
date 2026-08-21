@@ -67,6 +67,18 @@ export default function SessionsPage() {
     setError("");
   }
 
+function formatForDateTimeLocal(date: Date | string | null | undefined): string {
+  if (!date) return "";
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return "";
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
   function openCreate() {
     resetForm();
     setIsOpen(true);
@@ -84,8 +96,8 @@ export default function SessionsPage() {
     setEditId(s.id);
     setFormName(s.name);
     setFormRoomId(s.roomId ?? "");
-    setFormStartsAt(s.startsAt ? new Date(s.startsAt).toISOString().slice(0, 16) : "");
-    setFormEndsAt(s.endsAt ? new Date(s.endsAt).toISOString().slice(0, 16) : "");
+    setFormStartsAt(formatForDateTimeLocal(s.startsAt));
+    setFormEndsAt(formatForDateTimeLocal(s.endsAt));
     setFormStatus(s.status as SessionStatus);
     setFormSortOrder(s.sortOrder.toString());
     setError("");
