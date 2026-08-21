@@ -17,8 +17,7 @@ const geist = Geist({
 });
 
 import { AuthProvider } from "~/app/_components/AuthProvider";
-import { Navbar } from "~/app/_components/Navbar";
-import { TopBar } from "~/app/_components/TopBar";
+import { AppLayout } from "~/app/_components/AppLayout";
 import { LanguageProvider } from "~/app/_components/LanguageContext";
 import { MobileNavProvider } from "~/app/_components/MobileNavContext";
 
@@ -26,7 +25,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ja" className={`${geist.variable}`}>
+    <html lang="ja" className={`${geist.variable}`} suppressHydrationWarning>
       <body
         className="bg-bg-primary text-text-primary min-h-screen"
         suppressHydrationWarning
@@ -35,13 +34,7 @@ export default function RootLayout({
           <TRPCReactProvider>
             <AuthProvider>
               <MobileNavProvider>
-                <div className="flex h-screen overflow-hidden bg-[#F8FAFC]">
-                  <Navbar />
-                  <div className="flex-1 flex flex-col min-w-0 h-full">
-                    <TopBar />
-                    <main className="flex-1 overflow-y-auto">{children}</main>
-                  </div>
-                </div>
+                <AppLayout>{children}</AppLayout>
               </MobileNavProvider>
             </AuthProvider>
           </TRPCReactProvider>

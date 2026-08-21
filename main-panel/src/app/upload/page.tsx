@@ -56,7 +56,7 @@ type UploadState = {
 };
 
 export default function PublicUploadPage() {
-  const { lang, setLang, t } = useLanguage();
+  const { lang, setLang } = useLanguage();
 
   // Cascading Selection State
   const [events, setEvents] = useState<Event[]>([]);
@@ -121,49 +121,60 @@ export default function PublicUploadPage() {
 
         const fetchedSessions = data.sessions ?? [];
         setSessionsData(fetchedSessions);
-        setAvailableSessions(fetchedSessions.map((s) => ({ id: s.id, name: s.name })));
 
         const fetchedRooms = data.rooms ?? [];
         setRoomsData(fetchedRooms);
+        // Populate room dropdown immediately from the rooms data
+        setAvailableRooms(fetchedRooms.map((r) => r.name));
         
-        // Auto-reset lower dropdowns ONLY when event actually changes
-        setSelectedSessionId("");
+        // Auto-reset lower dropdowns when event changes
         setSelectedRoom("");
-        setAvailableRooms([]);
+        setSelectedSessionId("");
+        setAvailableSessions([]);
         setUploadStates({});
       })
       .catch(() => setError("Failed to load sessions and presenters."))
       .finally(() => setLoading(false));
   }, [selectedEventId, resetSelection]);
 
-  // Extract rooms for the selected session
+  // Filter sessions for the selected room
   useEffect(() => {
-    if (!selectedSessionId) {
-      setSelectedRoom("");
-      setAvailableRooms([]);
+    if (!selectedRoom) {
+      setSelectedSessionId("");
+      setAvailableSessions([]);
       return;
     }
 
-    const currentSession = sessionsData.find((s) => s.id === selectedSessionId);
-    let extractedRooms: string[] = [];
+    // Find the room object by name to get its id
+    const selectedRoomObj = roomsData.find((r) => r.name === selectedRoom);
 
-    if (currentSession?.room?.name) {
-      extractedRooms = [currentSession.room.name];
-    } else if (roomsData.length > 0) {
-      extractedRooms = roomsData.map((r) => r.name);
+    // Filter sessions that belong to the selected room
+    let filteredSessions: { id: string; name: string }[];
+    if (selectedRoomObj) {
+      filteredSessions = sessionsData
+        .filter((s) => s.roomId === selectedRoomObj.id || s.room?.id === selectedRoomObj.id)
+        .map((s) => ({ id: s.id, name: s.name }));
     } else {
-      extractedRooms = ["Main Hall"];
+      // Fallback: show sessions with no room assigned
+      filteredSessions = sessionsData
+        .filter((s) => !s.roomId && !s.room)
+        .map((s) => ({ id: s.id, name: s.name }));
     }
 
-    setAvailableRooms(extractedRooms);
-
-    // Auto-select room if single option
-    if (extractedRooms.length === 1 && extractedRooms[0]) {
-      setSelectedRoom(extractedRooms[0]);
-    } else {
-      setSelectedRoom("");
+    // If no sessions matched, show all sessions (graceful fallback)
+    if (filteredSessions.length === 0) {
+      filteredSessions = sessionsData.map((s) => ({ id: s.id, name: s.name }));
     }
-  }, [selectedSessionId, sessionsData, roomsData]);
+
+    setAvailableSessions(filteredSessions);
+
+    // Auto-select session if single option
+    if (filteredSessions.length === 1 && filteredSessions[0]) {
+      setSelectedSessionId(filteredSessions[0].id);
+    } else {
+      setSelectedSessionId("");
+    }
+  }, [selectedRoom, sessionsData, roomsData]);
 
   // Filter presenters by session and room
   const filteredPresenters = presenters.filter((p) => {
@@ -171,7 +182,7 @@ export default function PublicUploadPage() {
 
     // 1. Explicitly assigned to this session
     const hasExplicitAssignment = p.presentationAssignments.some(
-      (a) => a.liveSession && a.liveSession.id === selectedSessionId
+      (a) => a.liveSession?.id === selectedSessionId
     );
     if (hasExplicitAssignment) return true;
 
@@ -232,7 +243,7 @@ export default function PublicUploadPage() {
   }
 
   return (
-    <div style={{ height: "100vh", maxHeight: "100vh", overflow: "hidden", background: "#F8FAFC", padding: "1.5rem 2.5rem 2rem", fontFamily: "sans-serif", boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
+    <div style={{ minHeight: "100%", background: "#F8FAFC", padding: "1.5rem 2.5rem 2.5rem", fontFamily: "sans-serif", boxSizing: "border-box", display: "flex", flexDirection: "column" }}>
       
       {/* Top Header with Brand Style and Language Switcher */}
       <div style={{ maxWidth: "1600px", width: "100%", margin: "0 auto 1.5rem auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem", borderBottom: "1px solid #E2E8F0", paddingBottom: "1rem", flexShrink: 0 }}>
@@ -302,7 +313,7 @@ export default function PublicUploadPage() {
       <div style={{ maxWidth: "1600px", width: "100%", margin: "0 auto", display: "grid", gridTemplateColumns: "minmax(420px, 480px) 1fr", gap: "2rem", flex: 1, minHeight: 0, alignItems: "stretch" }}>
         
         {/* Left Column: Selection Controls Panel */}
-        <div style={{ background: "#FFFFFF", padding: "2rem", borderRadius: "16px", border: "1px solid #E2E8F0", boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.05)", display: "flex", flexDirection: "column", justifyContent: "flex-start", overflowY: "auto" }}>
+        <div style={{ background: "#FFFFFF", padding: "2rem 2rem 3rem 2rem", borderRadius: "16px", border: "1px solid #E2E8F0", boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.05)", display: "flex", flexDirection: "column", justifyContent: "flex-start", overflowY: "auto", maxHeight: "calc(100vh - 180px)" }}>
           <h2 style={{ fontSize: "32px", fontWeight: 700, color: "#0B1220", marginBottom: "1.75rem", lineHeight: 1.2, letterSpacing: "-0.01em" }}>
             {lang === "ja" ? "条件選択" : "Select Filters"}
           </h2>
@@ -328,38 +339,16 @@ export default function PublicUploadPage() {
             </select>
           </div>
 
-          {/* Step 2: Session Selection */}
+          {/* Step 2: Room Selection */}
           <div style={{ marginBottom: "1.75rem", opacity: selectedEventId ? 1 : 0.45, pointerEvents: selectedEventId ? "auto" : "none" }}>
             <label style={{ display: "block", fontSize: "20px", fontWeight: 600, color: "#334155", marginBottom: "0.5rem" }}>
-              {lang === "ja" ? "2. セッション" : "2. Session"}
-            </label>
-            <select
-              value={selectedSessionId}
-              onChange={(e) => setSelectedSessionId(e.target.value)}
-              disabled={!selectedEventId}
-              style={{ width: "100%", minHeight: "64px", padding: "0.85rem 1.25rem", fontSize: "20px", border: "1px solid #CBD5E1", borderRadius: "12px", backgroundColor: selectedEventId ? "#FFFFFF" : "#F8FAFC", color: "#0B1220", cursor: selectedEventId ? "pointer" : "not-allowed", outline: "none", lineHeight: 1.4 }}
-            >
-              <option value="">
-                {lang === "ja" ? "— セッションを選択してください —" : "— Select a Session —"}
-              </option>
-              {availableSessions.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Step 3: Room Selection */}
-          <div style={{ opacity: selectedSessionId ? 1 : 0.45, pointerEvents: selectedSessionId ? "auto" : "none" }}>
-            <label style={{ display: "block", fontSize: "20px", fontWeight: 600, color: "#334155", marginBottom: "0.5rem" }}>
-              {lang === "ja" ? "3. 会場（部屋）" : "3. Room"}
+              {lang === "ja" ? "2. 会場（部屋）" : "2. Room"}
             </label>
             <select
               value={selectedRoom}
               onChange={(e) => setSelectedRoom(e.target.value)}
-              disabled={!selectedSessionId}
-              style={{ width: "100%", minHeight: "64px", padding: "0.85rem 1.25rem", fontSize: "20px", border: "1px solid #CBD5E1", borderRadius: "12px", backgroundColor: selectedSessionId ? "#FFFFFF" : "#F8FAFC", color: "#0B1220", cursor: selectedSessionId ? "pointer" : "not-allowed", outline: "none", lineHeight: 1.4 }}
+              disabled={!selectedEventId}
+              style={{ width: "100%", minHeight: "64px", padding: "0.85rem 1.25rem", fontSize: "20px", border: "1px solid #CBD5E1", borderRadius: "12px", backgroundColor: selectedEventId ? "#FFFFFF" : "#F8FAFC", color: "#0B1220", cursor: selectedEventId ? "pointer" : "not-allowed", outline: "none", lineHeight: 1.4 }}
             >
               <option value="">
                 {lang === "ja" ? "— 会場を選択してください —" : "— Select a Room —"}
@@ -371,10 +360,32 @@ export default function PublicUploadPage() {
               ))}
             </select>
           </div>
+
+          {/* Step 3: Session Selection */}
+          <div style={{ marginBottom: "1.5rem", opacity: selectedRoom ? 1 : 0.45, pointerEvents: selectedRoom ? "auto" : "none" }}>
+            <label style={{ display: "block", fontSize: "20px", fontWeight: 600, color: "#334155", marginBottom: "0.5rem" }}>
+              {lang === "ja" ? "3. セッション" : "3. Session"}
+            </label>
+            <select
+              value={selectedSessionId}
+              onChange={(e) => setSelectedSessionId(e.target.value)}
+              disabled={!selectedRoom}
+              style={{ width: "100%", minHeight: "64px", padding: "0.85rem 1.25rem", fontSize: "20px", border: "1px solid #CBD5E1", borderRadius: "12px", backgroundColor: selectedRoom ? "#FFFFFF" : "#F8FAFC", color: "#0B1220", cursor: selectedRoom ? "pointer" : "not-allowed", outline: "none", lineHeight: 1.4 }}
+            >
+              <option value="">
+                {lang === "ja" ? "— セッションを選択してください —" : "— Select a Session —"}
+              </option>
+              {availableSessions.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Right Column: Presenters Panel */}
-        <div style={{ background: "#FFFFFF", padding: "2rem", borderRadius: "16px", border: "1px solid #E2E8F0", boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.05)", display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}>
+        <div style={{ background: "#FFFFFF", padding: "2rem", borderRadius: "16px", border: "1px solid #E2E8F0", boxShadow: "0 1px 3px 0 rgb(0 0 0 / 0.05)", display: "flex", flexDirection: "column", minHeight: 0, height: "100%", maxHeight: "calc(100vh - 180px)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexShrink: 0 }}>
             <h2 style={{ fontSize: "32px", fontWeight: 700, color: "#0B1220", margin: 0, lineHeight: 1.2, letterSpacing: "-0.01em" }}>
               {lang === "ja" ? "発表者一覧" : "Presenters"}
