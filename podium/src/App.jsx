@@ -14,9 +14,6 @@ function getDefaultWsUrl() {
     try {
       const panelUrl = new URL(mainPanelAuthUrl);
       const wsProto = panelUrl.protocol === "https:" ? "wss:" : "ws:";
-      if (panelUrl.port) {
-        return `${wsProto}//${panelUrl.host}`;
-      }
       return `${wsProto}//${panelUrl.hostname}:4001`;
     } catch {}
   }
@@ -327,9 +324,12 @@ export default function App() {
       return;
     }
     setSessionFilesLoading(true);
-    fetch(`${mainPanelAuthUrl}/api/live-sessions/${displaySessionId}/files`, { credentials: "include" })
+    fetch(`${mainPanelAuthUrl}/api/live-sessions/${displaySessionId}/files?status=approved`, { credentials: "include" })
       .then((r) => r.json())
-      .then((data) => setSessionFiles(data.files ?? []))
+      .then((data) => {
+        const list = (data.files ?? []).filter((f) => f.itemType === "cover" || f.status === "approved");
+        setSessionFiles(list);
+      })
       .catch(() => setSessionFiles([]))
       .finally(() => setSessionFilesLoading(false));
   };
@@ -517,7 +517,6 @@ export default function App() {
         },
       );
       wsClientRef.current = client;
-      client.connect();
       clearConnectTimeout();
       connectTimeoutRef.current = window.setTimeout(() => {
         if (wsClientRef.current === client) {
@@ -527,6 +526,7 @@ export default function App() {
           setNotificationMessage("error", `${t.notif.failedToConnect}: WebSocket timeout (${wsUrl})`);
         }
       }, 12000);
+      client.connect();
     } catch (err) {
       clearConnectTimeout();
       setDisplayState("error");
@@ -977,7 +977,13 @@ export default function App() {
                           ) : item.itemType === "cover" ? (
                             <span className="upload-item-name">🖼 {t.cover}: {item.coverText ?? ""}</span>
                           ) : (
-                            <span className="upload-item-name">{item.fileName ?? ""}</span>
+                            <span className="upload-item-name" style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                              <span>{item.fileName ?? ""}</span>
+                              <span style={{ fontSize: "11px", color: "var(--text-secondary, #475569)", display: "flex", alignItems: "center", gap: "4px" }}>
+                                <span style={{ fontWeight: 600, color: "#10B981" }}>{t.presenterNameLabel || "Presenter"}:</span>
+                                <span style={{ fontWeight: 500, color: "var(--text-primary, #0B1220)" }}>{item.presenterName || item.presenter?.displayName || item.presenter?.name || item.uploadedBy || (lang === "ja" ? "未設定" : "Presenter")}</span>
+                              </span>
+                            </span>
                           )}
                           <span className="upload-item-actions">
                             {item.publicUrl && isPowerPointFile(item.fileName ?? "") ? (
