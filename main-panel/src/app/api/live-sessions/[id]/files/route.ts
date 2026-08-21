@@ -78,8 +78,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const { id } = await params;
     const liveSession = await loadSessionWithTenantCheck(id, session);
 
+    const { searchParams } = new URL(request.url);
+    const statusParam = searchParams.get("status");
+    const onlyApproved = statusParam === "approved" || user.role === "presenter";
+
     const files = await db.submission.findMany({
-      where: { liveSessionId: liveSession.id, deletedAt: null },
+      where: {
+        liveSessionId: liveSession.id,
+        deletedAt: null,
+        ...(onlyApproved ? { status: "approved" } : {}),
+      },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       select: {
         id: true,
@@ -94,7 +102,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         createdAt: true,
         itemType: true,
         coverText: true,
-        presenter: { select: { id: true, displayName: true } },
+        presenter: { select: { id: true, displayName: true, name: true } },
       } as any,
     });
 
@@ -108,20 +116,27 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
     return withCorsHeaders(
       NextResponse.json({
-        files: files.map((f) => ({
-          id: f.id,
-          fileName: f.fileName,
-          fileSize: f.fileSize,
-          contentType: f.contentType,
-          publicUrl: f.publicUrl,
-          status: f.status,
-          sortOrder: f.sortOrder,
-          uploadedBy: uploaderNameById.get(String((f as any).createdBy)) ?? "Unknown",
-          uploadedAt: f.createdAt,
-          presenter: f.presenter,
-          itemType: (f as any).itemType,
-          coverText: (f as any).coverText,
-        })),
+        files: files.map((f) => {
+          const presenterObj = (f as any).presenter as { id: string; displayName: string | null; name: string | null } | null;
+          const uploaderName = uploaderNameById.get(String((f as any).createdBy)) ?? "Unknown";
+          const presenterName = presenterObj?.displayName || presenterObj?.name || (f.itemType === "cover" ? null : uploaderName);
+
+          return {
+            id: f.id,
+            fileName: f.fileName,
+            fileSize: f.fileSize,
+            contentType: f.contentType,
+            publicUrl: f.publicUrl,
+            status: f.status,
+            sortOrder: f.sortOrder,
+            uploadedBy: uploaderName,
+            uploadedAt: f.createdAt,
+            presenter: presenterObj,
+            presenterName,
+            itemType: (f as any).itemType,
+            coverText: (f as any).coverText,
+          };
+        }),
       }),
       request,
       allowedOrigins,

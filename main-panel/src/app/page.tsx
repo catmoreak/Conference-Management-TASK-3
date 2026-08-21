@@ -20,9 +20,10 @@ export default async function Home() {
     redirect("/admin/accounts");
   } else if (role === "reviewer") {
     redirect("/dashboard/staff");
+  } else if (role === "presenter") {
+    redirect("/dashboard/pres-ops");
   } else {
-    // presenter or other roles
-    redirect("/podium");
+    redirect("/dashboard/pres-ops");
   }
 
   return null;

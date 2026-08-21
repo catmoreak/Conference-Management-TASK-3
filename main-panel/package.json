@@ -20,6 +20,7 @@
     "preview": "next build && next start",
     "start": "tsx server.ts",
     "start:server": "tsx server.ts",
+    "ws:dev": "tsx scripts/ws-server.ts",
     "seed:admin": "tsx scripts/seed-admin.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"

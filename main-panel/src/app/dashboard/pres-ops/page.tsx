@@ -21,15 +21,43 @@ export default function PresOpsDashboard() {
   const [loadingFile, setLoadingFile] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
 
-  const { data: events } = api.event.list.useQuery();
+  const { data: events } = api.event.list.useQuery(undefined, {
+    enabled: !!user,
+  });
   const { data: sessions } = api.liveSession.listByEvent.useQuery(
     { eventId },
     { enabled: !!eventId },
   );
-  const { data: submissions } = api.submission.listApprovedForSession.useQuery(
+  const { data: submissions, isLoading: submissionsLoading } = api.submission.listApprovedForSession.useQuery(
     { liveSessionId },
     { enabled: !!liveSessionId },
   );
+
+  // Auto-select session when event is selected or sessions change
+  useEffect(() => {
+    if (!eventId) {
+      setLiveSessionId("");
+      return;
+    }
+    if (sessions && sessions.length > 0) {
+      setLiveSessionId((current) =>
+        sessions.some((s) => s.id === current) ? current : (sessions[0]?.id ?? ""),
+      );
+    }
+  }, [eventId, sessions]);
+
+  // Auto-select first approved presentation when session is selected or submissions load
+  useEffect(() => {
+    if (!liveSessionId) {
+      setSubmissionId("");
+      return;
+    }
+    if (submissions && submissions.length > 0) {
+      setSubmissionId((current) =>
+        submissions.some((s) => s.id === current) ? current : (submissions[0]?.id ?? ""),
+      );
+    }
+  }, [liveSessionId, submissions]);
 
   useEffect(() => {
     return () => {
@@ -39,6 +67,61 @@ export default function PresOpsDashboard() {
 
   function appendLog(line: string) {
     setLog((prev) => [`${new Date().toLocaleTimeString()}  ${line}`, ...prev].slice(0, 30));
+  }
+
+  function formatBytes(bytes?: number | null): string {
+    if (!bytes) return "—";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function formatEventSchedule(startDate?: Date | string | null, endDate?: Date | string | null, lang: string = "ja"): string | null {
+    if (!startDate && !endDate) return null;
+    const start = startDate ? new Date(startDate) : null;
+    const end = endDate ? new Date(endDate) : null;
+
+    const validStart = start && !isNaN(start.getTime()) ? start : null;
+    const validEnd = end && !isNaN(end.getTime()) ? end : null;
+
+    if (!validStart && !validEnd) return null;
+
+    const locale = lang === "ja" ? "ja-JP" : "en-US";
+
+    const dateOpts: Intl.DateTimeFormatOptions = {
+      year: "numeric",
+      month: lang === "ja" ? "numeric" : "short",
+      day: "numeric",
+    };
+    const timeOpts: Intl.DateTimeFormatOptions = {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    };
+
+    if (validStart && validEnd) {
+      const isSameDay = validStart.toDateString() === validEnd.toDateString();
+      const startDateStr = validStart.toLocaleDateString(locale, dateOpts);
+      const startTimeStr = validStart.toLocaleTimeString(locale, timeOpts);
+      const endTimeStr = validEnd.toLocaleTimeString(locale, timeOpts);
+
+      if (isSameDay) {
+        return `${startDateStr} ${startTimeStr} – ${endTimeStr}`;
+      } else {
+        const endDateStr = validEnd.toLocaleDateString(locale, dateOpts);
+        return `${startDateStr} ${startTimeStr} – ${endDateStr} ${endTimeStr}`;
+      }
+    }
+
+    if (validStart) {
+      return `${validStart.toLocaleDateString(locale, dateOpts)} ${validStart.toLocaleTimeString(locale, timeOpts)}`;
+    }
+
+    if (validEnd) {
+      return `~ ${validEnd.toLocaleDateString(locale, dateOpts)} ${validEnd.toLocaleTimeString(locale, timeOpts)}`;
+    }
+
+    return null;
   }
 
   async function handleConnect() {
@@ -139,22 +222,30 @@ export default function PresOpsDashboard() {
   }
 
   const selectedSubmission = (submissions ?? []).find((s) => s.id === submissionId);
+  const selectedEvent = (events ?? []).find((ev) => ev.id === eventId);
   const canOperate = connState === "connected" && displayConnected;
 
   async function handleLoad() {
     if (!selectedSubmission) return;
+    await loadPresentationById(selectedSubmission.id);
+  }
+
+  async function loadPresentationById(targetId: string) {
+    const target = (submissions ?? []).find((s) => s.id === targetId);
+    if (!target) return;
+    setSubmissionId(targetId);
     setLoadingFile(true);
     try {
-    const sub = selectedSubmission as any;
-    if (sub?.itemType === "cover") {
-      sendCommand({
-        type: "show_cover",
-        presentationId: sub.id,
-        text: sub.coverText ?? "",
-      });
-      return;
-    }
-      const res = await fetch(`/api/submissions/${selectedSubmission.id}/playback-url`);
+      const sub = target as any;
+      if (sub?.itemType === "cover") {
+        sendCommand({
+          type: "show_cover",
+          presentationId: sub.id,
+          text: sub.coverText ?? "",
+        });
+        return;
+      }
+      const res = await fetch(`/api/submissions/${target.id}/playback-url`);
       const data = (await res.json()) as { url?: string; error?: string };
       if (!res.ok || !data.url) {
         appendLog(`Failed to get playback URL: ${data.error ?? res.status}`);
@@ -162,7 +253,7 @@ export default function PresOpsDashboard() {
       }
       sendCommand({
         type: "load_presentation",
-        presentationId: selectedSubmission.id,
+        presentationId: target.id,
         fileUrl: data.url,
       });
     } finally {
@@ -272,6 +363,29 @@ export default function PresOpsDashboard() {
             </div>
           </div>
 
+          {selectedEvent && (
+            <div className="flex flex-wrap items-center gap-3 p-3 bg-gray-50/90 border border-gray-100 rounded-xl text-xs">
+              <div className="flex items-center gap-1.5 font-medium text-gray-700">
+                <svg className="w-4 h-4 text-[#10B981] flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 9v7.5" />
+                </svg>
+                <span className="font-bold text-gray-500">{lang === "ja" ? "開催日時:" : "Date & Time:"}</span>
+                <span className="font-semibold text-gray-900">
+                  {formatEventSchedule(selectedEvent.startDate, selectedEvent.endDate, lang) ?? (lang === "ja" ? "日時未定" : "Date & time not specified")}
+                </span>
+              </div>
+              {selectedEvent.location && (
+                <div className="flex items-center gap-1.5 text-gray-600 pl-3 border-l border-gray-200">
+                  <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                  </svg>
+                  <span className="font-medium text-gray-800">{selectedEvent.location}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
             <span
               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border tracking-wider uppercase shadow-sm ${
@@ -314,6 +428,146 @@ export default function PresOpsDashboard() {
               </button>
             )}
           </div>
+        </div>
+
+        {/* Approved Presentations List (Task 8: Auto-load approved PPTs with presenter names) */}
+        <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 shadow-sm mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-bold text-[#0B1220] tracking-tight flex items-center gap-2">
+                <svg className="w-4 h-4 text-[#10B981]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {t.presOpsDashboard.approvedPresentations}
+              </h2>
+              <p className="text-gray-500 text-xs mt-0.5">
+                {t.presOpsDashboard.approvedPresentationsSub}
+              </p>
+            </div>
+            {submissions && submissions.length > 0 && (
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/20">
+                {submissions.length} {lang === "ja" ? "件" : "files"}
+              </span>
+            )}
+          </div>
+
+          {!eventId || !liveSessionId ? (
+            <div className="p-8 text-center bg-gray-50/70 border border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center">
+              <svg className="w-10 h-10 text-gray-300 mb-2" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+              </svg>
+              <p className="text-xs font-semibold text-gray-400">{t.presOpsDashboard.selectEventAndSessionHint}</p>
+            </div>
+          ) : submissionsLoading ? (
+            <div className="p-8 text-center">
+              <p className="text-xs font-semibold text-gray-400">{lang === "ja" ? "承認済みファイルを読み込み中…" : "Loading approved presentations…"}</p>
+            </div>
+          ) : !submissions || submissions.length === 0 ? (
+            <div className="p-8 text-center bg-gray-50/70 border border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center">
+              <svg className="w-10 h-10 text-gray-300 mb-2" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
+              <p className="text-xs font-bold text-gray-600">{t.presOpsDashboard.noApprovedPresentations}</p>
+              <p className="text-[11px] text-gray-400 mt-1 max-w-md">{t.presOpsDashboard.noApprovedPresentationsHint}</p>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {(submissions ?? []).map((sub) => {
+                const isSelected = sub.id === submissionId;
+                const isCover = (sub as any).itemType === "cover";
+                const presenterName = sub.presenter?.displayName || sub.presenter?.name || (isCover ? "—" : (lang === "ja" ? "管理者・スタッフ登録" : "Staff / Direct Upload"));
+                const organization = sub.presenter?.organization;
+                const fileName = isCover ? `🖼 ${(sub as any).coverText ?? (lang === "ja" ? "カバースライド" : "Cover Slide")}` : (sub.fileName ?? "Presentation");
+
+                return (
+                  <div
+                    key={sub.id}
+                    onClick={() => setSubmissionId(sub.id)}
+                    className={`p-4 rounded-xl border transition cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+                      isSelected
+                        ? "bg-[#10B981]/5 border-[#10B981] shadow-sm ring-1 ring-[#10B981]"
+                        : "bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50/60"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <div className={`p-2.5 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                        isCover ? "bg-indigo-50 text-indigo-600" : "bg-blue-50 text-blue-600"
+                      }`}>
+                        {isCover ? (
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                          </svg>
+                        ) : (
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold text-gray-900 truncate">{fileName}</span>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/25 uppercase tracking-wider">
+                            {t.presOpsDashboard.approvedBadge}
+                          </span>
+                          {isSelected && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#0B1220] text-white uppercase tracking-wider">
+                              {t.presOpsDashboard.loaded}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-gray-500 flex-wrap">
+                          <span className="flex items-center gap-1 font-semibold text-gray-700">
+                            <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                            </svg>
+                            <span>{t.presOpsDashboard.presenter}:</span>
+                            <span className="text-gray-900 font-bold">{presenterName}</span>
+                            {organization ? <span className="text-gray-400 text-[11px]">({organization})</span> : null}
+                          </span>
+                          {!isCover && (sub as any).fileSize ? (
+                            <span className="text-gray-400 font-medium">· {formatBytes((sub as any).fileSize)}</span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-auto flex-shrink-0">
+                      <button
+                        type="button"
+                        disabled={!canOperate || (loadingFile && isSelected)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void loadPresentationById(sub.id);
+                        }}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition shadow-sm flex items-center gap-1.5 ${
+                          isSelected
+                            ? "bg-[#0B1220] hover:bg-[#1A253C] text-white"
+                            : "bg-white hover:bg-gray-50 text-gray-700 border border-gray-200"
+                        } disabled:opacity-50`}
+                      >
+                        {loadingFile && isSelected ? (
+                          <>
+                            <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            <span>{lang === "ja" ? "読み込み中..." : "Loading..."}</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3.5 h-3.5 text-[#10B981]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                            </svg>
+                            <span>{t.presOpsDashboard.loadIntoPodium}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-6">

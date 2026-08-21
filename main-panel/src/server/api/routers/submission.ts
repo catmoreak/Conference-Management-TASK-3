@@ -69,7 +69,7 @@ export const submissionRouter = createTRPCRouter({
         where: { liveSessionId: input.liveSessionId, status: "approved", deletedAt: null },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
         include: {
-          presenter: { select: { id: true, displayName: true } },
+          presenter: { select: { id: true, displayName: true, name: true, organization: true } },
         },
       });
     }),

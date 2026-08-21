@@ -22,6 +22,7 @@ export const translations = {
       events: "Events",
       auditLogs: "Audit Logs",
       files: "Files",
+      presOps: "Presenter Ops",
     },
     pageTitles: {
       accounts: "Account Management",
@@ -139,6 +140,17 @@ export const translations = {
       unblankScreen: "Unblank Screen",
       speakerNotes: "Speaker Notes",
       noNotes: "No speaker notes for this slide.",
+      approvedPresentations: "Approved Presentations",
+      approvedPresentationsSub: "Approved PPTX files ready to load into Podium for presentation.",
+      presenter: "Presenter",
+      fileName: "File Name",
+      loadIntoPodium: "Load into Podium",
+      loaded: "Selected / Loaded",
+      noApprovedPresentations: "No approved PPTX files for this session yet.",
+      noApprovedPresentationsHint: "Presentations submitted by speakers must be reviewed and approved by staff before appearing here.",
+      selectEventAndSessionHint: "Select an event and active session above to automatically view approved presentation files.",
+      approvedBadge: "Approved",
+      coverSlide: "Cover Slide",
     },
 
     // File Manager
@@ -282,6 +294,7 @@ export const translations = {
       events: "イベント管理",
       auditLogs: "監査ログ",
       files: "ファイル管理",
+      presOps: "プレゼン操作",
     },
     pageTitles: {
       accounts: "アカウント管理",
@@ -399,6 +412,17 @@ export const translations = {
       unblankScreen: "画面を再表示",
       speakerNotes: "発表者ノート",
       noNotes: "このスライドには発表者ノートがありません。",
+      approvedPresentations: "承認済みプレゼンテーション",
+      approvedPresentationsSub: "ポディウムへ読み込み可能な承認済みPPTXファイル一覧です。",
+      presenter: "発表者",
+      fileName: "ファイル名",
+      loadIntoPodium: "ポディウムへ読み込み",
+      loaded: "選択中 / 読み込み済み",
+      noApprovedPresentations: "このセッションには承認済みのPPTXファイルがまだありません。",
+      noApprovedPresentationsHint: "提出されたプレゼンテーションはスタッフの承認後に自動的にここに表示されます。",
+      selectEventAndSessionHint: "上部でイベントとアクティブセッションを選択すると承認済みプレゼンテーションが表示されます。",
+      approvedBadge: "承認済み",
+      coverSlide: "カバースライド",
     },
 
     // File Manager

@@ -25,6 +25,54 @@ function formatBytes(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function formatEventSchedule(startDate?: Date | string | null, endDate?: Date | string | null, lang: string = "ja"): string | null {
+  if (!startDate && !endDate) return null;
+  const start = startDate ? new Date(startDate) : null;
+  const end = endDate ? new Date(endDate) : null;
+
+  const validStart = start && !isNaN(start.getTime()) ? start : null;
+  const validEnd = end && !isNaN(end.getTime()) ? end : null;
+
+  if (!validStart && !validEnd) return null;
+
+  const locale = lang === "ja" ? "ja-JP" : "en-US";
+
+  const dateOpts: Intl.DateTimeFormatOptions = {
+    year: "numeric",
+    month: lang === "ja" ? "numeric" : "short",
+    day: "numeric",
+  };
+  const timeOpts: Intl.DateTimeFormatOptions = {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  };
+
+  if (validStart && validEnd) {
+    const isSameDay = validStart.toDateString() === validEnd.toDateString();
+    const startDateStr = validStart.toLocaleDateString(locale, dateOpts);
+    const startTimeStr = validStart.toLocaleTimeString(locale, timeOpts);
+    const endTimeStr = validEnd.toLocaleTimeString(locale, timeOpts);
+
+    if (isSameDay) {
+      return `${startDateStr} ${startTimeStr} – ${endTimeStr}`;
+    } else {
+      const endDateStr = validEnd.toLocaleDateString(locale, dateOpts);
+      return `${startDateStr} ${startTimeStr} – ${endDateStr} ${endTimeStr}`;
+    }
+  }
+
+  if (validStart) {
+    return `${validStart.toLocaleDateString(locale, dateOpts)} ${validStart.toLocaleTimeString(locale, timeOpts)}`;
+  }
+
+  if (validEnd) {
+    return `~ ${validEnd.toLocaleDateString(locale, dateOpts)} ${validEnd.toLocaleTimeString(locale, timeOpts)}`;
+  }
+
+  return null;
+}
+
 function getPreviewUrl(file: SessionFile): string | null {
   if (!file.publicUrl) return null;
   const name = file.fileName?.toLowerCase() ?? "";
@@ -54,11 +102,15 @@ export default function SessionFilesPage() {
   const [coverText, setCoverText] = useState("");
   const [addingCover, setAddingCover] = useState(false);
 
-  const { data: events } = api.event.list.useQuery();
+  const { data: events } = api.event.list.useQuery(undefined, {
+    enabled: !!user,
+  });
   const { data: sessions } = api.liveSession.listByEvent.useQuery(
     { eventId },
     { enabled: !!eventId },
   );
+
+  const selectedEvent = (events ?? []).find((ev) => ev.id === eventId);
 
   useEffect(() => {
     if (!eventId) {
@@ -263,6 +315,29 @@ export default function SessionFilesPage() {
               </div>
             )}
           </div>
+
+          {selectedEvent && (
+            <div className="flex flex-wrap items-center gap-3 p-3 bg-gray-50/90 border border-gray-100 rounded-xl text-xs">
+              <div className="flex items-center gap-1.5 font-medium text-gray-700">
+                <svg className="w-4 h-4 text-[#10B981] flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 9v7.5" />
+                </svg>
+                <span className="font-bold text-gray-500">{lang === "ja" ? "開催日時:" : "Date & Time:"}</span>
+                <span className="font-semibold text-gray-900">
+                  {formatEventSchedule(selectedEvent.startDate, selectedEvent.endDate, lang) ?? (lang === "ja" ? "日時未定" : "Date & time not specified")}
+                </span>
+              </div>
+              {selectedEvent.location && (
+                <div className="flex items-center gap-1.5 text-gray-600 pl-3 border-l border-gray-200">
+                  <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                  </svg>
+                  <span className="font-medium text-gray-800">{selectedEvent.location}</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {canUpload && liveSessionId && (
             <div>

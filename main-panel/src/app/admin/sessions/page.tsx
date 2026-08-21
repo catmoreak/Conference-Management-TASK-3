@@ -27,12 +27,13 @@ export default function AdminSessionsPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (user && user.role !== "admin") {
+    if (!user) return;
+    if (user.role !== "admin") {
       router.replace("/");
-    } else {
-      void fetchSessions();
+      return;
     }
-  }, [user]);
+    void fetchSessions();
+  }, [user, router]);
 
   const fetchSessions = async () => {
     setLoading(true);
@@ -42,13 +43,15 @@ export default function AdminSessionsPage() {
         headers: { "Content-Type": "application/json" },
       });
       if (!res.ok) {
-        throw new Error(await res.text());
+        const errorData = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(errorData.error || (lang === "ja" ? "セッションの取得に失敗しました。" : "Failed to fetch sessions."));
+        return;
       }
       const data = (await res.json()) as ActiveSession[];
       setSessions(data);
     } catch (err: unknown) {
       console.error(err);
-      setError(lang === "ja" ? "アクティブセッションログの取得に失敗しました。" : "Failed to retrieve active session logs.");
+      setError(lang === "ja" ? "セッションの取得に失敗しました。" : "Failed to fetch sessions.");
     } finally {
       setLoading(false);
     }

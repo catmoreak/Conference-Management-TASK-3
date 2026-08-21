@@ -37,12 +37,13 @@ export default function AdminAccountsPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (user && user.role !== "admin") {
+    if (!user) return;
+    if (user.role !== "admin") {
       router.replace("/");
-    } else {
-      void fetchAccounts();
+      return;
     }
-  }, [user]);
+    void fetchAccounts();
+  }, [user, router]);
 
   const fetchAccounts = async () => {
     setLoading(true);
@@ -52,7 +53,9 @@ export default function AdminAccountsPage() {
         headers: { "Content-Type": "application/json" },
       });
       if (!res.ok) {
-        throw new Error(await res.text());
+        const errorData = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(errorData.error || (lang === "ja" ? "ユーザーアカウントの読み込みに失敗しました。" : "Failed to load user accounts."));
+        return;
       }
       const data = (await res.json()) as Account[];
       setAccounts(data);
