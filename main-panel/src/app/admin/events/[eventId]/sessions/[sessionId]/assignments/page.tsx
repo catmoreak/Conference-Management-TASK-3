@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "~/trpc/react";
@@ -20,16 +20,14 @@ export default function AssignmentsPage() {
   const [formDuration, setFormDuration] = useState("");
   const [error, setError] = useState("");
 
-  if (!user || (user.role !== "admin" && user.role !== "reviewer")) {
-    router.replace("/");
-    return null;
-  }
+  const isAuthorized = !!user && (user.role === "admin" || user.role === "reviewer");
 
-  const { data: session } = api.liveSession.getById.useQuery({ id: sessionId });
-  const { data: presenters } = api.presenter.listByEvent.useQuery({ eventId });
-  const { data: assignments, refetch, isLoading } = api.presentationAssignment.listBySession.useQuery({
-    liveSessionId: sessionId,
-  });
+  const { data: session } = api.liveSession.getById.useQuery({ id: sessionId }, { enabled: isAuthorized });
+  const { data: presenters } = api.presenter.listByEvent.useQuery({ eventId }, { enabled: isAuthorized });
+  const { data: assignments, refetch, isLoading } = api.presentationAssignment.listBySession.useQuery(
+    { liveSessionId: sessionId },
+    { enabled: isAuthorized },
+  );
 
   const assignMutation = api.presentationAssignment.assign.useMutation({
     onSuccess: () => { void refetch(); resetForm(); },
@@ -43,6 +41,16 @@ export default function AssignmentsPage() {
     onSuccess: () => void refetch(),
     onError: (e) => setError(e.message),
   });
+
+  useEffect(() => {
+    if (user && !isAuthorized) {
+      router.replace("/");
+    }
+  }, [user, isAuthorized, router]);
+
+  if (!isAuthorized) {
+    return null;
+  }
 
   function resetForm() {
     setIsOpen(false);

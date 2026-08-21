@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "~/trpc/react";
@@ -22,13 +22,10 @@ export default function RoomsPage() {
   const [formSortOrder, setFormSortOrder] = useState("0");
   const [error, setError] = useState("");
 
-  if (!user || (user.role !== "admin" && user.role !== "reviewer")) {
-    router.replace("/");
-    return null;
-  }
+  const isAuthorized = !!user && (user.role === "admin" || user.role === "reviewer");
 
-  const { data: event } = api.event.getById.useQuery({ id: eventId });
-  const { data: rooms, refetch, isLoading } = api.room.listByEvent.useQuery({ eventId });
+  const { data: event } = api.event.getById.useQuery({ id: eventId }, { enabled: isAuthorized });
+  const { data: rooms, refetch, isLoading } = api.room.listByEvent.useQuery({ eventId }, { enabled: isAuthorized });
 
   const createMutation = api.room.create.useMutation({
     onSuccess: () => { void refetch(); resetForm(); },
@@ -42,6 +39,16 @@ export default function RoomsPage() {
     onSuccess: () => void refetch(),
     onError: (e) => setError(e.message),
   });
+
+  useEffect(() => {
+    if (user && !isAuthorized) {
+      router.replace("/");
+    }
+  }, [user, isAuthorized, router]);
+
+  if (!isAuthorized) {
+    return null;
+  }
 
   function resetForm() {
     setIsOpen(false);

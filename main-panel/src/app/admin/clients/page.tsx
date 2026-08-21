@@ -24,17 +24,9 @@ export default function AdminClientsPage() {
   const [formStatus, setFormStatus] = useState<ClientStatus>("active");
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (user && user.role !== "admin") {
-      router.replace("/");
-    }
-  }, [user, router]);
+  const isAuthorized = !!user && user.role === "admin";
 
-  if (!user || user.role !== "admin") {
-    return null;
-  }
-
-  const { data: clients, refetch, isLoading } = api.clients.list.useQuery();
+  const { data: clients, refetch, isLoading } = api.clients.list.useQuery(undefined, { enabled: isAuthorized });
 
   const createMutation = api.clients.create.useMutation({
     onSuccess: () => { void refetch(); resetForm(); },
@@ -44,6 +36,16 @@ export default function AdminClientsPage() {
     onSuccess: () => { void refetch(); resetForm(); },
     onError: (e) => setError(e.message),
   });
+
+  useEffect(() => {
+    if (user && !isAuthorized) {
+      router.replace("/");
+    }
+  }, [user, isAuthorized, router]);
+
+  if (!isAuthorized) {
+    return null;
+  }
 
   function resetForm() {
     setIsOpen(false);

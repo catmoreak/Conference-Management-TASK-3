@@ -31,17 +31,9 @@ export default function AdminEventsPage() {
   const [formStatus, setFormStatus] = useState<EventStatus>("draft");
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (user && user.role !== "admin" && user.role !== "reviewer") {
-      router.replace("/");
-    }
-  }, [user, router]);
+  const isAuthorized = !!user && (user.role === "admin" || user.role === "reviewer");
 
-  if (!user || (user.role !== "admin" && user.role !== "reviewer")) {
-    return null;
-  }
-
-  const { data: events, refetch, isLoading } = api.event.list.useQuery();
+  const { data: events, refetch, isLoading } = api.event.list.useQuery(undefined, { enabled: isAuthorized });
 
   const createMutation = api.event.create.useMutation({
     onSuccess: () => { void refetch(); resetForm(); },
@@ -51,6 +43,16 @@ export default function AdminEventsPage() {
     onSuccess: () => { void refetch(); resetForm(); },
     onError: (e) => setError(e.message),
   });
+
+  useEffect(() => {
+    if (user && !isAuthorized) {
+      router.replace("/");
+    }
+  }, [user, isAuthorized, router]);
+
+  if (!isAuthorized) {
+    return null;
+  }
 
   function resetForm() {
     setIsOpen(false);

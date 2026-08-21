@@ -17,23 +17,14 @@ export default function PresentersPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [formName, setFormName] = useState("");
-  const [formEmail, setFormEmail] = useState("");
   const [formBio, setFormBio] = useState("");
   const [formStatus, setFormStatus] = useState<"active" | "inactive">("active");
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!user || (user.role !== "admin" && user.role !== "reviewer")) {
-      router.replace("/");
-    }
-  }, [user, router]);
+  const isAuthorized = !!user && (user.role === "admin" || user.role === "reviewer");
 
-  if (!user || (user.role !== "admin" && user.role !== "reviewer")) {
-    return null;
-  }
-
-  const { data: event } = api.event.getById.useQuery({ id: eventId });
-  const { data: presenters, refetch, isLoading } = api.presenter.listByEvent.useQuery({ eventId });
+  const { data: event } = api.event.getById.useQuery({ id: eventId }, { enabled: isAuthorized });
+  const { data: presenters, refetch, isLoading } = api.presenter.listByEvent.useQuery({ eventId }, { enabled: isAuthorized });
 
   const createMutation = api.presenter.create.useMutation({
     onSuccess: () => { void refetch(); resetForm(); },
@@ -48,11 +39,20 @@ export default function PresentersPage() {
     onError: (e) => setError(e.message),
   });
 
+  useEffect(() => {
+    if (user && !isAuthorized) {
+      router.replace("/");
+    }
+  }, [user, isAuthorized, router]);
+
+  if (!isAuthorized) {
+    return null;
+  }
+
   function resetForm() {
     setIsOpen(false);
     setEditId(null);
     setFormName("");
-    setFormEmail("");
     setFormBio("");
     setFormStatus("active");
     setError("");
@@ -66,13 +66,11 @@ export default function PresentersPage() {
   function openEdit(p: {
     id: string;
     name: string;
-    email: string;
     bio?: string | null;
     status: string;
   }) {
     setEditId(p.id);
     setFormName(p.name);
-    setFormEmail(p.email);
     setFormBio(p.bio ?? "");
     setFormStatus(p.status === "active" || p.status === "inactive" ? p.status : "inactive");
     setError("");
@@ -86,7 +84,6 @@ export default function PresentersPage() {
       updateMutation.mutate({
         id: editId,
         name: formName,
-        email: formEmail,
         bio: formBio || null,
         status: formStatus,
       });
@@ -94,7 +91,6 @@ export default function PresentersPage() {
       createMutation.mutate({
         eventId,
         name: formName,
-        email: formEmail,
         bio: formBio || undefined,
         status: formStatus,
       });
@@ -193,12 +189,6 @@ export default function PresentersPage() {
                 <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="pres-name">{t.accountsPage.name}</label>
                 <input id="pres-name" type="text" required value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="pres-email">{t.accountsPage.email}</label>
-                <input id="pres-email" type="email" required value={formEmail}
-                  onChange={(e) => setFormEmail(e.target.value)}
                   className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none" />
               </div>
               <div>

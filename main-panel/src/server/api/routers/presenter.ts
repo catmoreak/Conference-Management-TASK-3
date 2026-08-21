@@ -1,4 +1,4 @@
-﻿/**
+/**
  * tRPC router: Presenter management.
  * Presenters are event-scoped records that can optionally link to a User.
  */
@@ -128,11 +128,11 @@ export const presenterRouter = createTRPCRouter({
       assertTenantAccess(ctx.session, event.tenantId, true);
 
       const presenterName = (input.name ?? input.displayName ?? "").trim();
-      const presenterEmail = (input.email ?? "").trim();
-      if (!presenterName || !presenterEmail) {
+      const presenterEmail = (input.email && input.email.trim() ? input.email.trim() : `${crypto.randomUUID()}@presenter.local`);
+      if (!presenterName) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Presenter name and email are required.",
+          message: "Presenter name is required.",
         });
       }
 
@@ -187,12 +187,12 @@ export const presenterRouter = createTRPCRouter({
       const { id, ...data } = input;
       const presenter = await loadPresenterWithTenantCheck(ctx.db, ctx.session, id);
       const nextName = (data.name ?? data.displayName ?? presenter.name).trim();
-      const nextEmail = (data.email ?? presenter.email).trim();
+      const nextEmail = (data.email && data.email.trim() ? data.email.trim() : presenter.email);
 
-      if (!nextName || !nextEmail) {
+      if (!nextName) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Presenter name and email are required.",
+          message: "Presenter name is required.",
         });
       }
 
