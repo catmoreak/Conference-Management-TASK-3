@@ -31,24 +31,42 @@ export default function SessionsPage() {
   const [formEndsAt, setFormEndsAt] = useState("");
   const [formStatus, setFormStatus] = useState<SessionStatus>("scheduled");
   const [formSortOrder, setFormSortOrder] = useState("0");
+  const [formPresenterIds, setFormPresenterIds] = useState<string[]>([]);
+  const [formPresenterPick, setFormPresenterPick] = useState("");
   const [error, setError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   const isAuthorized = !!user && (user.role === "admin" || user.role === "reviewer");
 
   const { data: event } = api.event.getById.useQuery({ id: eventId }, { enabled: isAuthorized });
   const { data: rooms } = api.room.listByEvent.useQuery({ eventId }, { enabled: isAuthorized });
   const { data: sessions, refetch, isLoading } = api.liveSession.listByEvent.useQuery({ eventId }, { enabled: isAuthorized });
+  const { data: eventPresenters } = api.presenter.listByEvent.useQuery({ eventId }, { enabled: isAuthorized });
+  const { data: existingAssignments } = api.presentationAssignment.listBySession.useQuery(
+    { liveSessionId: editId ?? "" },
+    { enabled: isAuthorized && isOpen && !!editId },
+  );
+
+  useEffect(() => {
+    if (editId && existingAssignments) {
+      setFormPresenterIds(existingAssignments.map((a) => a.presenterId));
+    }
+  }, [editId, existingAssignments]);
 
   const createMutation = api.liveSession.create.useMutation({
-    onSuccess: () => { void refetch(); resetForm(); },
     onError: (e) => setError(e.message),
   });
   const updateMutation = api.liveSession.update.useMutation({
-    onSuccess: () => { void refetch(); resetForm(); },
     onError: (e) => setError(e.message),
   });
   const deleteMutation = api.liveSession.delete.useMutation({
     onSuccess: () => void refetch(),
+    onError: (e) => setError(e.message),
+  });
+  const assignMutation = api.presentationAssignment.assign.useMutation({
+    onError: (e) => setError(e.message),
+  });
+  const unassignMutation = api.presentationAssignment.unassign.useMutation({
     onError: (e) => setError(e.message),
   });
 
@@ -71,6 +89,8 @@ export default function SessionsPage() {
     setFormEndsAt("");
     setFormStatus("scheduled");
     setFormSortOrder("0");
+    setFormPresenterIds([]);
+    setFormPresenterPick("");
     setError("");
   }
 
@@ -107,36 +127,75 @@ function formatForDateTimeLocal(date: Date | string | null | undefined): string 
     setFormEndsAt(formatForDateTimeLocal(s.endsAt));
     setFormStatus(s.status as SessionStatus);
     setFormSortOrder(s.sortOrder.toString());
+    setFormPresenterIds([]);
+    setFormPresenterPick("");
     setError("");
     setIsOpen(true);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  function addPresenterToForm() {
+    if (!formPresenterPick) return;
+    setFormPresenterIds((prev) => (prev.includes(formPresenterPick) ? prev : [...prev, formPresenterPick]));
+    setFormPresenterPick("");
+  }
+
+  function removePresenterFromForm(presenterId: string) {
+    setFormPresenterIds((prev) => prev.filter((id) => id !== presenterId));
+  }
+
+  async function reconcilePresenters(liveSessionId: string) {
+    const currentIds = new Set((existingAssignments ?? []).map((a) => a.presenterId));
+    const desiredIds = new Set(formPresenterIds);
+    const toAdd = formPresenterIds.filter((id) => !currentIds.has(id));
+    const toRemove = (existingAssignments ?? []).filter((a) => !desiredIds.has(a.presenterId));
+
+    await Promise.all([
+      ...toAdd.map((presenterId) => assignMutation.mutateAsync({ liveSessionId, presenterId })),
+      ...toRemove.map((a) => unassignMutation.mutateAsync({ id: a.id })),
+    ]);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (editId) {
-      updateMutation.mutate({
-        id: editId,
-        name: formName,
-        roomId: formRoomId || null,
-        startsAt: formStartsAt ? new Date(formStartsAt).toISOString() : null,
-        endsAt: formEndsAt ? new Date(formEndsAt).toISOString() : null,
-        status: formStatus,
-        sortOrder: parseInt(formSortOrder),
-      });
-    } else {
-      createMutation.mutate({
-        eventId,
-        name: formName,
-        roomId: formRoomId || undefined,
-        startsAt: formStartsAt ? new Date(formStartsAt).toISOString() : undefined,
-        endsAt: formEndsAt ? new Date(formEndsAt).toISOString() : undefined,
-        sortOrder: parseInt(formSortOrder),
-      });
+    setIsSaving(true);
+    try {
+      if (editId) {
+        await updateMutation.mutateAsync({
+          id: editId,
+          name: formName,
+          roomId: formRoomId || null,
+          startsAt: formStartsAt ? new Date(formStartsAt).toISOString() : null,
+          endsAt: formEndsAt ? new Date(formEndsAt).toISOString() : null,
+          status: formStatus,
+          sortOrder: parseInt(formSortOrder),
+        });
+        await reconcilePresenters(editId);
+      } else {
+        const created = await createMutation.mutateAsync({
+          eventId,
+          name: formName,
+          roomId: formRoomId || undefined,
+          startsAt: formStartsAt ? new Date(formStartsAt).toISOString() : undefined,
+          endsAt: formEndsAt ? new Date(formEndsAt).toISOString() : undefined,
+          sortOrder: parseInt(formSortOrder),
+        });
+        await reconcilePresenters(created.id);
+      }
+      void refetch();
+      resetForm();
+    } catch {
+      // error message already set by the failing mutation's onError handler
+    } finally {
+      setIsSaving(false);
     }
   }
 
-  const isPending = createMutation.isPending || updateMutation.isPending;
+  const isPending = createMutation.isPending || updateMutation.isPending || isSaving;
+  const availableEventPresenters = (eventPresenters ?? []).filter((p) => !formPresenterIds.includes(p.id));
+  const selectedPresenterDetails = formPresenterIds
+    .map((id) => (eventPresenters ?? []).find((p) => p.id === id))
+    .filter((p): p is NonNullable<typeof p> => !!p);
 
   const getStatusLabel = (st: SessionStatus) => {
     if (lang === "ja") {
@@ -286,6 +345,55 @@ function formatForDateTimeLocal(date: Date | string | null | undefined): string 
                   <input id="sess-order" type="number" min="0" value={formSortOrder} onChange={(e) => setFormSortOrder(e.target.value)}
                     className="w-full bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none" />
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-text-secondary mb-1" htmlFor="sess-add-presenter">
+                  {lang === "ja" ? "発表者を追加" : "Add Presenters"}
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    id="sess-add-presenter"
+                    value={formPresenterPick}
+                    onChange={(e) => setFormPresenterPick(e.target.value)}
+                    className="flex-1 bg-white border border-border-soft text-text-primary text-sm rounded-lg px-3 py-2 focus:ring-2 focus:ring-accent-blue outline-none"
+                  >
+                    <option value="">{lang === "ja" ? "— 発表者を選択 —" : "— Select a presenter —"}</option>
+                    {availableEventPresenters.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.displayName}{p.organization ? ` (${p.organization})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={addPresenterToForm}
+                    disabled={!formPresenterPick}
+                    aria-label={lang === "ja" ? "発表者を追加" : "Add presenter"}
+                    className="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-accent-blue hover:bg-accent-blue/90 text-white font-bold text-lg leading-none transition disabled:opacity-50 shadow-hard-sm"
+                  >
+                    +
+                  </button>
+                </div>
+                {selectedPresenterDetails.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {selectedPresenterDetails.map((p) => (
+                      <span
+                        key={p.id}
+                        className="inline-flex items-center gap-1.5 pl-3 pr-1.5 py-1 rounded-full text-xs font-semibold bg-accent-blue/10 text-accent-blue border border-accent-blue/30"
+                      >
+                        {p.displayName}
+                        <button
+                          type="button"
+                          onClick={() => removePresenterFromForm(p.id)}
+                          aria-label={lang === "ja" ? `${p.displayName} を削除` : `Remove ${p.displayName}`}
+                          className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-accent-blue/20 leading-none"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               {error && <p className="text-error text-xs">{error}</p>}
               <div className="flex justify-end gap-3 mt-6">
