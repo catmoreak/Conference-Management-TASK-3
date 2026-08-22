@@ -87,7 +87,17 @@ export default function AdminAccountsPage() {
       });
 
       if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
+        const data = (await res.json()) as {
+          error?: string;
+          details?: { fieldErrors?: Record<string, string[]> };
+        };
+        const fieldErrors = data.details?.fieldErrors;
+        if (fieldErrors && Object.keys(fieldErrors).length > 0) {
+          const messages = Object.entries(fieldErrors)
+            .map(([field, msgs]) => `${field}: ${msgs?.join(", ")}`)
+            .join("; ");
+          throw new Error(`${data.error ?? "Validation failed"} — ${messages}`);
+        }
         throw new Error(data.error ?? (lang === "ja" ? "アカウント作成に失敗しました。" : "Failed to create account."));
       }
 
